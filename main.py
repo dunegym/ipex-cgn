@@ -2,6 +2,7 @@ import openvino_genai as ov_genai
 import time
 import tkinter as tk
 from tkinter import ttk, messagebox
+import os
 
 model_list=['TinyLlama-1.1B-int4',
             'TinyLlama-1.1B-int8']
@@ -32,6 +33,9 @@ def start_gui():
         try:
             start_time = time.time()
             if selected_device == 'NPU':
+                # 确保 .npucache 文件夹存在
+                if not os.path.exists('.npucache'):
+                    os.makedirs('.npucache')
                 global pipe
                 pipe = ov_genai.LLMPipeline(selected_model, selected_device, NPUW_CACHE_DIR=f".npucache/{selected_model}")
             else:
