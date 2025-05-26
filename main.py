@@ -3,7 +3,8 @@ import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-model_list=['TinyLlama-1.1B']
+model_list=['TinyLlama-1.1B-int4',
+            'TinyLlama-1.1B-int8']
 device_list=['CPU','GPU','NPU']
 m,n=0,0
 pipe = None  # 确保在程序启动时 pipe 被定义
@@ -105,7 +106,7 @@ def start_gui():
     # 模型选择
     tk.Label(root, text="选择模型:").grid(row=0, column=0, padx=10, pady=10)
     model_var = tk.StringVar(value=model_list[0])
-    model_menu = ttk.OptionMenu(root, model_var, *model_list)
+    model_menu = ttk.OptionMenu(root, model_var, model_list[0], *model_list)
     model_menu.grid(row=0, column=1, padx=10, pady=10)
 
     # 设备选择
