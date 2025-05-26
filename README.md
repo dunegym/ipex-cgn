@@ -1,5 +1,17 @@
 # ipex-cgn
 
+## 项目功能
+
+基于openvino-genai的本地LLM聊天平台，提供图形化界面，可以在CPU、核显、集成NPU之间自如切换。
+
+## 硬件要求
+
+本项目已通过验证的硬件环境为Intel Ultra 5 125H处理器；理论上搭载Intel NPU的Meteor Lake及Lunar Lake系列处理器均可运行本项目，欢迎大家用更多元的硬件来体验并反馈问题。
+
+## 软件要求
+
+本人推荐使用最新版Anaconda，并用conda管理环境与第三方库，缺环境的读者可以前往 https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/ 下载安装；venv也是可以使用的，如Intel官方文档所示： https://docs.openvino.ai/2025/openvino-workflow-generative/inference-with-genai/inference-with-genai-on-npu.html
+
 ## 部署方法
 
 #### 第一步：克隆仓库
@@ -32,14 +44,6 @@ pip install openvino==2025.1 openvino-tokenizers==2025.1 openvino-genai==2025.1
 ```bash
 python main.py
 ```
-
-## 硬件要求
-
-本项目已通过验证的硬件环境为Intel Ultra 5 125H处理器；理论上搭载Intel NPU的Meteor Lake及Lunar Lake系列处理器均可运行本项目，欢迎大家用更多元的硬件来体验并反馈问题。
-
-## 软件要求
-
-本人推荐使用最新版Anaconda，并用conda管理环境与第三方库，缺环境的读者可以前往 https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/ 下载安装；venv也是可以使用的，如Intel官方文档所示： https://docs.openvino.ai/2025/openvino-workflow-generative/inference-with-genai/inference-with-genai-on-npu.html
 
 ## 项目说明
 
