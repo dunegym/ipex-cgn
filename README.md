@@ -45,6 +45,8 @@ pip install openvino==2025.1 openvino-tokenizers==2025.1 openvino-genai==2025.1
 python main.py
 ```
 
+###### 第一次环境配置完成后，运行run.bat即可再次启动，无需切换目录、激活环境等步骤。
+
 ## 项目说明
 
 目前本项目只支持TinyLlama-1.1B模型，日后我会向仓库中添加更多量化好的的模型并更新主程序代码。在Intel官方的努力下，openvino-genai库及其依赖正处于不断更新中，本人也将及时跟进，使该项目能支持当下最流行的LLM。😀
