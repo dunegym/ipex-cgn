@@ -2,7 +2,7 @@
 
 ## 项目功能
 
-基于openvino-genai的本地LLM聊天平台，提供图形化界面，可以在CPU、核显、集成NPU之间自如切换。
+基于openvino_genai的本地LLM聊天平台，提供图形化界面，可以在CPU、核显、集成NPU之间自如切换。
 
 ## 硬件要求
 
@@ -47,4 +47,12 @@ python main.py
 
 ## 项目说明
 
-目前本项目只支持TinyLlama-1.1B模型，日后我会向仓库中添加更多量化好的的模型并更新主程序代码。为了方便使用，免去每次切换目录、激活环境的麻烦，我会将代码打包成exe文件并及时上传至仓库；exe版本将长期保持稳定，而main.py会持续更新。在Intel官方的努力下，openvino-genai库及其依赖正处于不断更新中，本人也将及时跟进，使该项目能支持当下最流行的LLM。😀
+目前本项目只支持TinyLlama-1.1B模型，日后我会向仓库中添加更多量化好的的模型并更新主程序代码。在Intel官方的努力下，openvino-genai库及其依赖正处于不断更新中，本人也将及时跟进，使该项目能支持当下最流行的LLM。😀
+
+如需自行添加量化模型，可参考：https://docs.openvino.ai/2025/openvino-workflow-generative/inference-with-genai/inference-with-genai-on-npu.html
+
+## 引用
+
+openvino_genai库官方文档：https://docs.openvino.ai/2025/api/genai_api/_autosummary/openvino_genai.html
+
+TinyLlama-1.1B模型文档：https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0
