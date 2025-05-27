@@ -4,8 +4,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os
 
-model_list=['TinyLlama-1.1B-int4',
-            'TinyLlama-1.1B-int8']
+
+model_list=['TinyLlama-1.1B']
+quantization_list=['int4','int8']
 device_list=['CPU','GPU','NPU']
 m,n=0,0
 pipe = None  # 确保在程序启动时 pipe 被定义
@@ -17,16 +18,20 @@ def start_gui():
             load_button.grid_remove()
             unload_button.grid()
             model_menu.config(state=tk.DISABLED)  # 禁用模型选项卡
+            quant_menu.config(state=tk.DISABLED)  # 禁用量化精度选项卡
             device_menu.config(state=tk.DISABLED)  # 禁用设备选项卡
         else:
             unload_button.grid_remove()
             load_button.grid()
             model_menu.config(state=tk.NORMAL)  # 启用模型选项卡
+            quant_menu.config(state=tk.NORMAL)  # 启用量化精度选项卡
             device_menu.config(state=tk.NORMAL)  # 启用设备选项卡
 
     def load_model():
         selected_model = model_var.get()
+        selected_quant = quant_var.get()
         selected_device = device_var.get()
+        model_dir = f"model/{selected_model}-{selected_quant}"
         console_display.insert(tk.END, 'Loading......\n')
         console_display.see(tk.END)  # 确保最新消息可见
         root.update()  # 强制更新界面，确保立即显示 'Loading......'
@@ -37,9 +42,9 @@ def start_gui():
                 if not os.path.exists('.npucache'):
                     os.makedirs('.npucache')
                 global pipe
-                pipe = ov_genai.LLMPipeline(selected_model, selected_device, NPUW_CACHE_DIR=f".npucache/{selected_model}")
+                pipe = ov_genai.LLMPipeline(model_dir, selected_device, CACHE_DIR=f".npucache/{selected_model}-{selected_quant}")
             else:
-                pipe = ov_genai.LLMPipeline(selected_model, selected_device)
+                pipe = ov_genai.LLMPipeline(model_dir, selected_device)
             end_time = time.time()
             load_time = end_time - start_time
             console_display.insert(tk.END, f"模型加载成功！耗时：{load_time:.2f} 秒\n\n")
@@ -82,7 +87,12 @@ def start_gui():
 
         try:
             prompt = f"User's question: '{user_input}'; AI assistant's answer: "
-            result = pipe.generate([prompt], max_new_tokens=128, do_sample=False)
+            result = pipe.generate(
+                [prompt],
+                max_new_tokens=128,
+                do_sample=False,
+                use_cache=True
+            )
             perf_metrics = result.perf_metrics
             chat_display.insert(tk.END, f"助手: {result}\n\n")
             chat_display.see(tk.END)
@@ -103,6 +113,7 @@ def start_gui():
         unload_model()
         root.destroy()
 
+
     root = tk.Tk()
     root.title("LLM 聊天助手")
     root.protocol("WM_DELETE_WINDOW", on_closing)
@@ -110,42 +121,61 @@ def start_gui():
     # 模型选择
     tk.Label(root, text="选择模型:").grid(row=0, column=0, padx=10, pady=10)
     model_var = tk.StringVar(value=model_list[0])
+    def update_model_menu():
+        menu = model_menu['menu']
+        menu.delete(0, 'end')
+        for m in model_list:
+            menu.add_command(label=m, command=tk._setit(model_var, m))
+        model_var.set(model_list[0])
+
     model_menu = ttk.OptionMenu(root, model_var, model_list[0], *model_list)
     model_menu.grid(row=0, column=1, padx=10, pady=10)
 
+    # 量化精度选择
+    tk.Label(root, text="量化精度:").grid(row=1, column=0, padx=10, pady=10)
+    quant_var = tk.StringVar(value=quantization_list[0])
+    quant_menu = ttk.OptionMenu(root, quant_var, quantization_list[0], *quantization_list)
+    quant_menu.grid(row=1, column=1, padx=10, pady=10)
+
     # 设备选择
-    tk.Label(root, text="选择设备:").grid(row=1, column=0, padx=10, pady=10)
+    tk.Label(root, text="选择设备:").grid(row=2, column=0, padx=10, pady=10)
     device_var = tk.StringVar(value=device_list[0])
     device_menu = ttk.OptionMenu(root, device_var, device_list[0], *device_list)
     device_menu.config(width=12)  # 增加宽度以确保所有选项始终可见
-    device_menu.grid(row=1, column=1, padx=10, pady=10)
+    device_menu.grid(row=2, column=1, padx=10, pady=10)
+
 
     # 加载按钮
     load_button = ttk.Button(root, text="加载模型", command=load_model)
-    load_button.grid(row=2, column=0, columnspan=2, pady=10)
+    load_button.grid(row=3, column=0, columnspan=2, pady=10)
 
     # 卸载按钮
     unload_button = ttk.Button(root, text="卸载模型", command=unload_model)
-    unload_button.grid(row=3, column=0, columnspan=2, pady=10)
+    unload_button.grid(row=4, column=0, columnspan=2, pady=10)
     unload_button.grid_remove()  # 初始隐藏卸载按钮
+
 
     # 聊天显示框
     chat_display = tk.Text(root, height=15, width=50, state=tk.NORMAL)
-    chat_display.grid(row=4, column=0, columnspan=2, padx=10, pady=10)
+    chat_display.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
 
     # 控制台显示框
     console_display = tk.Text(root, height=10, width=50, state=tk.NORMAL, bg="lightgray")
-    console_display.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+    console_display.grid(row=6, column=0, columnspan=2, padx=10, pady=10)
 
     # 用户输入框
     user_entry = ttk.Entry(root, width=40)
-    user_entry.grid(row=6, column=0, padx=10, pady=10)
+    user_entry.grid(row=7, column=0, padx=10, pady=10)
     user_entry.bind("<KeyRelease>", lambda event: update_send_button())
     user_entry.bind("<FocusIn>", lambda event: update_send_button())  # 确保每次输入框获得焦点时更新按钮状态
 
     # 发送按钮
     send_button = ttk.Button(root, text="发送", command=send_message, state=tk.DISABLED)
-    send_button.grid(row=6, column=1, padx=10, pady=10)
+    send_button.grid(row=7, column=1, padx=10, pady=10)
+
+
+    # 保证模型选项卡内容与 model_list 同步
+    update_model_menu()
 
     root.mainloop()
 
