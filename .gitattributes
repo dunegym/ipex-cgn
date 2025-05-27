@@ -1,3 +1,5 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 TinyLlama-1.1B-int4/openvino_model.bin filter=lfs diff=lfs merge=lfs -text
 TinyLlama-1.1B-int8/openvino_model.bin filter=lfs diff=lfs merge=lfs -text
+model/TinyLlama-1.1B-int4/openvino_model.bin filter=lfs diff=lfs merge=lfs -text
+model/TinyLlama-1.1B-int8/openvino_model.bin filter=lfs diff=lfs merge=lfs -text
