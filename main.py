@@ -1,3 +1,4 @@
+from transformers import AutoTokenizer
 import openvino_genai as ov_genai
 import time
 import tkinter as tk
@@ -5,7 +6,8 @@ from tkinter import ttk, messagebox
 import os
 
 
-model_list=['TinyLlama-1.1B']
+model_list=['TinyLlama-1.1B',
+            'DeepSeek-1.5B']
 quantization_list=['int4','int8']
 device_list=['CPU','GPU','NPU']
 m,n=0,0
@@ -42,9 +44,22 @@ def start_gui():
                 if not os.path.exists('.npucache'):
                     os.makedirs('.npucache')
                 global pipe
-                pipe = ov_genai.LLMPipeline(model_dir, selected_device, CACHE_DIR=f".npucache/{selected_model}-{selected_quant}")
+                pipe = ov_genai.LLMPipeline(model_dir, 
+                                            selected_device, 
+                                            GENERATE_HINT="BEST_PERF", 
+                                            CACHE_DIR=f".npucache/{selected_model}-{selected_quant}"
+                )
             else:
                 pipe = ov_genai.LLMPipeline(model_dir, selected_device)
+
+            # 加载tokenizer，供后续build_prompt使用
+            global tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_dir,
+                local_files_only=True,
+                trust_remote_code=True
+            )
+
             end_time = time.time()
             load_time = end_time - start_time
             console_display.insert(tk.END, f"模型加载成功！耗时：{load_time:.2f} 秒\n\n")
@@ -66,6 +81,35 @@ def start_gui():
         except Exception as e:
             console_display.insert(tk.END, f"模型卸载失败：{str(e)}\n\n")
             console_display.see(tk.END)
+    
+    def build_prompt(user_input, model_name):
+        """
+        根据模型名自动选择模板，优先使用 transformers tokenizer 的 apply_chat_template 方法。
+        """
+        model_dir = None
+        # 根据模型名和量化自动推断本地路径
+        for quant in quantization_list:
+            candidate = f"model/{model_name}-{quant}"
+            if os.path.isdir(candidate):
+                model_dir = candidate
+                break
+        if model_dir is None:
+            model_dir = f"model/{model_name}-int4"  # 兜底
+
+        try:
+            global tokenizer
+            messages = [
+                {"role": "user", "content": user_input}
+            ]
+            # 优先用chat_template
+            return tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        except Exception:
+            # 回退到手动模板
+            return f"<|user|>\n{user_input}\n<|assistant|>\n"
 
     def send_message():
         user_input = user_entry.get()
@@ -86,11 +130,12 @@ def start_gui():
         root.update()  # 强制更新界面，确保控制台消息立即显示
 
         try:
-            prompt = f"User's question: '{user_input}'; AI assistant's answer: "
+            selected_model = model_var.get()
+            prompt = build_prompt(user_input, selected_model)
             result = pipe.generate(
                 [prompt],
-                max_new_tokens=128,
-                do_sample=False,
+                max_new_tokens=512,
+                do_sample=True,
                 use_cache=True
             )
             perf_metrics = result.perf_metrics
