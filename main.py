@@ -10,8 +10,8 @@ model_list=['TinyLlama-1.1B',
             'DeepSeek-1.5B']
 quantization_list=['int4','int8']
 device_list=['CPU','GPU','NPU']
-m,n=0,0
 pipe = None  # 确保在程序启动时 pipe 被定义
+chat_history = []
 
 # GUI 主程序
 def start_gui():
@@ -47,7 +47,8 @@ def start_gui():
                 pipe = ov_genai.LLMPipeline(model_dir, 
                                             selected_device, 
                                             GENERATE_HINT="BEST_PERF", 
-                                            CACHE_DIR=f".npucache/{selected_model}-{selected_quant}"
+                                            CACHE_DIR=f".npucache/{selected_model}-{selected_quant}",
+                                            MAX_PROMPT_LEN=2048
                 )
             else:
                 pipe = ov_genai.LLMPipeline(model_dir, selected_device)
@@ -59,7 +60,6 @@ def start_gui():
                 local_files_only=True,
                 trust_remote_code=True
             )
-
             end_time = time.time()
             load_time = end_time - start_time
             console_display.insert(tk.END, f"模型加载成功！耗时：{load_time:.2f} 秒\n\n")
@@ -81,13 +81,13 @@ def start_gui():
         except Exception as e:
             console_display.insert(tk.END, f"模型卸载失败：{str(e)}\n\n")
             console_display.see(tk.END)
-    
+
     def build_prompt(user_input, model_name):
         """
         根据模型名自动选择模板，优先使用 transformers tokenizer 的 apply_chat_template 方法。
+        支持上下文记忆，自动拼接最近3轮对话。
         """
         model_dir = None
-        # 根据模型名和量化自动推断本地路径
         for quant in quantization_list:
             candidate = f"model/{model_name}-{quant}"
             if os.path.isdir(candidate):
@@ -97,11 +97,12 @@ def start_gui():
             model_dir = f"model/{model_name}-int4"  # 兜底
 
         try:
-            global tokenizer
-            messages = [
-                {"role": "user", "content": user_input}
-            ]
-            # 优先用chat_template
+            global tokenizer, chat_history
+            # 取最近3轮历史，每轮包含user和assistant
+            n = len(chat_history)
+            history = chat_history[-n:] if n <= 6 else chat_history[-6:]
+            # 构造messages，历史+当前user
+            messages = [{"role": "system", "content": "You are a helpful assistant. "}] + history + [{"role": "user", "content": user_input}]
             return tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
@@ -110,6 +111,7 @@ def start_gui():
         except Exception:
             # 回退到手动模板
             return f"<|user|>\n{user_input}\n<|assistant|>\n"
+
 
     def send_message():
         user_input = user_entry.get()
@@ -143,6 +145,12 @@ def start_gui():
             chat_display.see(tk.END)
             console_display.insert(tk.END, f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
             console_display.see(tk.END)
+            # 记录历史对话，最多保留最近3轮
+            global chat_history
+            chat_history.append({"role": "user", "content": user_input})
+            chat_history.append({"role": "assistant", "content": str(result)})
+            if len(chat_history) > 6:
+                chat_history = chat_history[-6:]
         except Exception as e:
             chat_display.insert(tk.END, f"助手: 无法生成回复，错误: {str(e)}\n\n")
             chat_display.see(tk.END)
