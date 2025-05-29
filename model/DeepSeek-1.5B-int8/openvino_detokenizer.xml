@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+<net name="detokenizer" version="11">
+	<layers>
+		<layer id="0" name="Parameter_83146" type="Parameter" version="opset1">
+			<data shape="?,?" element_type="i64" />
+			<output>
+				<port id="0" precision="I64" names="Parameter_83146">
+					<dim>-1</dim>
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="1" name="Convert_83316" type="Convert" version="opset1">
+			<data destination_type="i32" />
+			<input>
+				<port id="0" precision="I64">
+					<dim>-1</dim>
+					<dim>-1</dim>
+				</port>
+			</input>
+			<output>
+				<port id="1" precision="I32">
+					<dim>-1</dim>
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="2" name="Constant_83148" type="Const" version="opset1">
+			<data element_type="i32" shape="151665" offset="0" size="606660" />
+			<output>
+				<port id="0" precision="I32">
+					<dim>151665</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="3" name="Constant_83150" type="Const" version="opset1">
+			<data element_type="i32" shape="151665" offset="606660" size="606660" />
+			<output>
+				<port id="0" precision="I32">
+					<dim>151665</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="4" name="Constant_83152" type="Const" version="opset1">
+			<data element_type="u8" shape="976273" offset="1213320" size="976273" />
+			<output>
+				<port id="0" precision="U8">
+					<dim>976273</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="5" name="Slice_83157" type="Const" version="opset1">
+			<data element_type="i32" shape="9" offset="2189593" size="36" />
+			<output>
+				<port id="0" precision="I32">
+					<dim>9</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="6" name="VocabDecoder_83159" type="VocabDecoder" version="extension">
+			<data skip_tokens="" />
+			<input>
+				<port id="0" precision="I32">
+					<dim>-1</dim>
+					<dim>-1</dim>
+				</port>
+				<port id="1" precision="I32">
+					<dim>151665</dim>
+				</port>
+				<port id="2" precision="I32">
+					<dim>151665</dim>
+				</port>
+				<port id="3" precision="U8">
+					<dim>976273</dim>
+				</port>
+				<port id="4" precision="I32">
+					<dim>9</dim>
+				</port>
+			</input>
+			<output>
+				<port id="5" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="6" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="7" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="8" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="9" precision="U8">
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="7" name="FuzeRagged_83160" type="FuzeRagged" version="extension">
+			<input>
+				<port id="0" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="1" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="2" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="3" precision="I32">
+					<dim>-1</dim>
+				</port>
+			</input>
+			<output>
+				<port id="4" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="5" precision="I32">
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="8" name="UTF8Validate_83161" type="UTF8Validate" version="extension">
+			<data replace_mode="true" />
+			<input>
+				<port id="0" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="1" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="2" precision="U8">
+					<dim>-1</dim>
+				</port>
+			</input>
+			<output>
+				<port id="3" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="4" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="5" precision="U8">
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="9" name="StringTensorPack_83162" type="StringTensorPack" version="opset15">
+			<input>
+				<port id="0" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="1" precision="I32">
+					<dim>-1</dim>
+				</port>
+				<port id="2" precision="U8">
+					<dim>-1</dim>
+				</port>
+			</input>
+			<output>
+				<port id="3" precision="STRING" names="Result_83163,string_output">
+					<dim>-1</dim>
+				</port>
+			</output>
+		</layer>
+		<layer id="10" name="Result_83163" type="Result" version="opset1" output_names="Result_83163,string_output">
+			<input>
+				<port id="0" precision="STRING">
+					<dim>-1</dim>
+				</port>
+			</input>
+		</layer>
+	</layers>
+	<edges>
+		<edge from-layer="0" from-port="0" to-layer="1" to-port="0" />
+		<edge from-layer="1" from-port="1" to-layer="6" to-port="0" />
+		<edge from-layer="2" from-port="0" to-layer="6" to-port="1" />
+		<edge from-layer="3" from-port="0" to-layer="6" to-port="2" />
+		<edge from-layer="4" from-port="0" to-layer="6" to-port="3" />
+		<edge from-layer="5" from-port="0" to-layer="6" to-port="4" />
+		<edge from-layer="6" from-port="5" to-layer="7" to-port="0" />
+		<edge from-layer="6" from-port="6" to-layer="7" to-port="1" />
+		<edge from-layer="6" from-port="7" to-layer="7" to-port="2" />
+		<edge from-layer="6" from-port="8" to-layer="7" to-port="3" />
+		<edge from-layer="6" from-port="9" to-layer="8" to-port="2" />
+		<edge from-layer="7" from-port="4" to-layer="8" to-port="0" />
+		<edge from-layer="7" from-port="5" to-layer="8" to-port="1" />
+		<edge from-layer="8" from-port="3" to-layer="9" to-port="0" />
+		<edge from-layer="8" from-port="4" to-layer="9" to-port="1" />
+		<edge from-layer="8" from-port="5" to-layer="9" to-port="2" />
+		<edge from-layer="9" from-port="3" to-layer="10" to-port="0" />
+	</edges>
+	<rt_info>
+		<add_attention_mask value="True" />
+		<add_prefix_space />
+		<add_special_tokens value="True" />
+		<bos_token_id value="151646" />
+		<chat_template value="{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{% set ns = namespace(is_first=false, is_tool=false, is_output_first=true, system_prompt='') %}{%- for message in messages %}{%- if message['role'] == 'system' %}{% set ns.system_prompt = message['content'] %}{%- endif %}{%- endfor %}{{bos_token}}{{ns.system_prompt}}{%- for message in messages %}{%- if message['role'] == 'user' %}{%- set ns.is_tool = false -%}{{'&lt;｜User｜>' + message['content']}}{%- endif %}{%- if message['role'] == 'assistant' and message['content'] is none %}{%- set ns.is_tool = false -%}{%- for tool in message['tool_calls']%}{%- if not ns.is_first %}{{'&lt;｜Assistant｜>&lt;｜tool▁calls▁begin｜>&lt;｜tool▁call▁begin｜>' + tool['type'] + '&lt;｜tool▁sep｜>' + tool['function']['name'] + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '&lt;｜tool▁call▁end｜>'}}{%- set ns.is_first = true -%}{%- else %}{{'\n' + '&lt;｜tool▁call▁begin｜>' + tool['type'] + '&lt;｜tool▁sep｜>' + tool['function']['name'] + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '&lt;｜tool▁call▁end｜>'}}{{'&lt;｜tool▁calls▁end｜>&lt;｜end▁of▁sentence｜>'}}{%- endif %}{%- endfor %}{%- endif %}{%- if message['role'] == 'assistant' and message['content'] is not none %}{%- if ns.is_tool %}{{'&lt;｜tool▁outputs▁end｜>' + message['content'] + '&lt;｜end▁of▁sentence｜>'}}{%- set ns.is_tool = false -%}{%- else %}{% set content = message['content'] %}{% if '&lt;/think>' in content %}{% set content = content.split('&lt;/think>')[-1] %}{% endif %}{{'&lt;｜Assistant｜>' + content + '&lt;｜end▁of▁sentence｜>'}}{%- endif %}{%- endif %}{%- if message['role'] == 'tool' %}{%- set ns.is_tool = true -%}{%- if ns.is_output_first %}{{'&lt;｜tool▁outputs▁begin｜>&lt;｜tool▁output▁begin｜>' + message['content'] + '&lt;｜tool▁output▁end｜>'}}{%- set ns.is_output_first = false %}{%- else %}{{'\n&lt;｜tool▁output▁begin｜>' + message['content'] + '&lt;｜tool▁output▁end｜>'}}{%- endif %}{%- endif %}{%- endfor -%}{% if ns.is_tool %}{{'&lt;｜tool▁outputs▁end｜>'}}{% endif %}{% if add_generation_prompt and not ns.is_tool %}{{'&lt;｜Assistant｜>'}}{% endif %}" />
+		<clean_up_tokenization_spaces />
+		<detokenizer_input_type value="i64" />
+		<eos_token_id value="151643" />
+		<handle_special_tokens_with_re />
+		<max_length />
+		<number_of_inputs value="1" />
+		<openvino_tokenizers_version value="2025.1.0.0-523-710ddf14de8" />
+		<openvino_version value="2025.1.0-18503-6fec06580ab-releases/2025/1" />
+		<original_post_processor_template value="{&quot;type&quot;: &quot;TemplateProcessing&quot;, &quot;single&quot;: [{&quot;SpecialToken&quot;: {&quot;id&quot;: &quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;, &quot;type_id&quot;: 0}}, {&quot;Sequence&quot;: {&quot;id&quot;: &quot;A&quot;, &quot;type_id&quot;: 0}}], &quot;pair&quot;: [{&quot;SpecialToken&quot;: {&quot;id&quot;: &quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;, &quot;type_id&quot;: 0}}, {&quot;Sequence&quot;: {&quot;id&quot;: &quot;A&quot;, &quot;type_id&quot;: 0}}, {&quot;SpecialToken&quot;: {&quot;id&quot;: &quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;, &quot;type_id&quot;: 1}}, {&quot;Sequence&quot;: {&quot;id&quot;: &quot;B&quot;, &quot;type_id&quot;: 1}}], &quot;special_tokens&quot;: {&quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;: {&quot;id&quot;: &quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;, &quot;ids&quot;: [151646], &quot;tokens&quot;: [&quot;&lt;\uff5cbegin\u2581of\u2581sentence\uff5c>&quot;]}}}" />
+		<original_tokenizer_class value="&lt;class 'transformers.models.llama.tokenization_llama_fast.LlamaTokenizerFast'>" />
+		<pad_token_id value="151643" />
+		<processed_post_processor_template value="{&quot;single&quot;: {&quot;ids&quot;: [151646, -1], &quot;type_ids&quot;: [0, 0]}, &quot;pair&quot;: {&quot;ids&quot;: [151646, -1, 151646, -2], &quot;type_ids&quot;: [0, 0, 1, 1]}}" />
+		<sentencepiece_version value="0.2.0" />
+		<skip_special_tokens value="True" />
+		<streaming_detokenizer value="False" />
+		<tokenizer_output_type value="i64" />
+		<tokenizers_version value="0.21.1" />
+		<transformers_version value="4.51.3" />
+		<use_max_padding value="False" />
+		<use_sentencepiece_backend value="False" />
+		<utf8_replace_mode value="replace" />
+		<with_detokenizer value="True" />
+	</rt_info>
+</net>
