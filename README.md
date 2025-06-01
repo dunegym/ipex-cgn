@@ -53,6 +53,13 @@ python main.py
 
 在Intel官方的努力下，openvino-genai库及其依赖正处于不断更新中，本人也将及时跟进，使该项目能支持当下最流行的LLM。😀
 
+##### 模型实测
+
+TinyLlama-1.1B-Chat-v1.0：可以在任意芯片上正常使用。
+DeepSeek-R1-Distill-Qwen-1.5B：可以在CPU与GPU上正常使用；int4量化模型能在NPU上使用，但使用缓存时会乱码；int8量化模型无法在NPU上使用。
+ChatGLM3-6B：可以在CPU与GPU上正常使用，在NPU上会乱码。
+Qwen3-4B：chat template异常，无法使用。
+
 ## 拓展教程
 
 ### 导出、量化模型
@@ -104,8 +111,6 @@ pip install --upgrade optimum-intel
 ```
 
 optimum-intel及其依赖（包括transformers等在内）将得到升级，近期流行的LLM均可支持。
-
-目前经过本人测试，在本项目中可以稳定运行的LLM包括ChatGLM3-6B等。
 
 ## 引用
 
