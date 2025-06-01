@@ -56,8 +56,11 @@ python main.py
 ##### 模型实测
 
 TinyLlama-1.1B-Chat-v1.0：可以在任意芯片上正常使用。
+
 DeepSeek-R1-Distill-Qwen-1.5B：可以在CPU与GPU上正常使用；int4量化模型能在NPU上使用，但使用缓存时会乱码；int8量化模型无法在NPU上使用。
+
 ChatGLM3-6B：可以在CPU与GPU上正常使用，在NPU上会乱码。
+
 Qwen3-4B：chat template异常，无法使用。
 
 ## 拓展教程
