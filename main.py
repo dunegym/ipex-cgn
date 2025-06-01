@@ -94,17 +94,10 @@ class LLMChatManager:
     def generate_reply(self, prompt, max_new_tokens=512):
         if not self.pipe:
             raise RuntimeError("模型未加载")
-        # 判断当前设备
-        device = getattr(self.pipe, 'device', None)
-        # 兼容旧openvino_genai，若无device属性则回退为True
-        if device is not None and str(device).upper() == 'NPU':
-            do_sample = False
-        else:
-            do_sample = True
         return self.pipe.generate(
             [prompt],
             max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
+            do_sample=True,
             use_cache=True
         )
 
@@ -148,12 +141,20 @@ def start_gui():
         root.update()
 
     def do_load_model():
-        selected_model = model_var.get()
-        selected_quant = quant_var.get()
-        selected_device = device_var.get()
-        success = manager.load_model(selected_model, selected_quant, selected_device, console_callback)
-        toggle_buttons(success)
-        update_send_button()
+        def load():
+            selected_model = model_var.get()
+            selected_quant = quant_var.get()
+            selected_device = device_var.get()
+            # 加载前先禁用按钮，防止重复点击
+            root.after(0, lambda: toggle_buttons(False))
+            root.after(0, lambda: update_send_button())
+            # 分阶段输出，防止界面假死
+            def safe_console(msg):
+                root.after(0, lambda: console_callback(msg))
+            success = manager.load_model(selected_model, selected_quant, selected_device, safe_console)
+            root.after(0, lambda: toggle_buttons(success))
+            root.after(0, update_send_button)
+        threading.Thread(target=load, daemon=True).start()
 
     def do_unload_model():
         manager.unload_model(console_callback)
@@ -161,26 +162,28 @@ def start_gui():
         update_send_button()
 
     def do_send_message():
-        user_input = user_entry.get()
-        if user_input.strip().lower() == 'quit':
-            root.destroy()
-            return
-        chat_callback(f"用户: {user_input}\n\n")
-        user_entry.delete(0, tk.END)
-        send_button.config(state=tk.DISABLED)
-        console_callback("消息成功发送，等待输出中......\n")
-        try:
-            selected_model = model_var.get()
-            prompt = manager.build_prompt(user_input, selected_model)
-            result = manager.generate_reply(prompt)
-            perf_metrics = result.perf_metrics
-            chat_callback(f"助手: {result}\n\n")
-            console_callback(f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
-            manager.append_history(user_input, result)
-        except Exception as e:
-            chat_callback(f"助手: 无法生成回复，错误: {str(e)}\n\n")
-        finally:
-            update_send_button()
+        def send():
+            user_input = user_entry.get()
+            if user_input.strip().lower() == 'quit':
+                root.destroy()
+                return
+            chat_callback(f"用户: {user_input}\n\n")
+            user_entry.delete(0, tk.END)
+            send_button.config(state=tk.DISABLED)
+            console_callback("消息成功发送，等待输出中......\n")
+            try:
+                selected_model = model_var.get()
+                prompt = manager.build_prompt(user_input, selected_model)
+                result = manager.generate_reply(prompt)
+                perf_metrics = result.perf_metrics
+                chat_callback(f"助手: {result}\n\n")
+                console_callback(f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
+                manager.append_history(user_input, result)
+            except Exception as e:
+                chat_callback(f"助手: 无法生成回复，错误: {str(e)}\n\n")
+            finally:
+                update_send_button()
+        threading.Thread(target=send, daemon=True).start()
 
     def update_send_button(*args):
         is_enabled = user_entry.get().strip() and manager.pipe
