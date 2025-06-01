@@ -5,6 +5,18 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os
 import threading
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+def handle_exception(e, console_callback=None, prefix="错误"):
+    msg = f"{prefix}: {str(e)}\n\n"
+    logging.error(msg)
+    if console_callback:
+        console_callback(msg)
 
 MODEL_LIST = ['TinyLlama-1.1B', 'DeepSeek-1.5B']
 QUANTIZATION_LIST = ['int4', 'int8']
@@ -47,12 +59,12 @@ class LLMChatManager:
             load_time = end_time - start_time
             if console_callback:
                 console_callback(f"模型加载成功！耗时：{load_time:.2f} 秒\n\n")
+            logging.info(f"模型 {model_name}-{quant} 加载成功，设备: {device}，耗时: {load_time:.2f} 秒")
             return True
         except Exception as e:
-            if console_callback:
-                console_callback(f"模型加载失败：{str(e)}\n\n")
             self.pipe = None
             self.tokenizer = None
+            handle_exception(e, console_callback, prefix="模型加载失败")
             return False
 
     def unload_model(self, console_callback=None):
@@ -61,10 +73,10 @@ class LLMChatManager:
             self.tokenizer = None
             if console_callback:
                 console_callback("模型已成功卸载！\n\n")
+            logging.info("模型已成功卸载！")
             return True
         except Exception as e:
-            if console_callback:
-                console_callback(f"模型卸载失败：{str(e)}\n\n")
+            handle_exception(e, console_callback, prefix="模型卸载失败")
             return False
 
     def build_prompt(self, user_input, model_name):
@@ -88,18 +100,34 @@ class LLMChatManager:
                 tokenize=False,
                 add_generation_prompt=True
             )
-        except Exception:
+        except Exception as e:
+            handle_exception(e, prefix="Prompt 构建失败")
             return f"<|user|>\n{user_input}\n<|assistant|>\n"
 
     def generate_reply(self, prompt, max_new_tokens=512):
         if not self.pipe:
-            raise RuntimeError("模型未加载")
-        return self.pipe.generate(
-            [prompt],
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            use_cache=True
-        )
+            err = RuntimeError("模型未加载")
+            handle_exception(err)
+            raise err
+        try:
+            # 判断当前设备
+            device = getattr(self.pipe, 'device', None)
+            # 兼容旧openvino_genai，若无device属性则回退为True
+            if device is not None and str(device).upper() == 'NPU':
+                do_sample = False
+            else:
+                do_sample = True
+            result = self.pipe.generate(
+                [prompt],
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                use_cache=True
+            )
+            logging.info(f"推理完成，tokens: {max_new_tokens}, do_sample: {do_sample}")
+            return result
+        except Exception as e:
+            handle_exception(e, prefix="推理失败")
+            raise
 
     def append_history(self, user_input, assistant_output):
         self.chat_history.append({"role": "user", "content": user_input})
