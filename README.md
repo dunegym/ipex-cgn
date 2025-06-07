@@ -6,7 +6,7 @@
 
 ## 硬件要求
 
-本项目已通过验证的硬件环境为Intel Ultra 5 125H处理器；理论上搭载Intel NPU的Meteor Lake及Lunar Lake系列处理器均可运行本项目，欢迎大家用更多元的硬件来体验并反馈问题。
+本项目已通过验证的硬件环境为Intel Ultra 5 125H处理器；理论上搭载Intel NPU的Meteor Lake、Arrow Lake及Lunar Lake系列处理器均可运行本项目，欢迎大家用更多元的硬件来体验并反馈问题。
 
 ## 软件要求
 
