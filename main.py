@@ -1,35 +1,29 @@
-from transformers import AutoTokenizer
-import openvino_genai as ov_genai
-import time
-import tkinter as tk
-from tkinter import ttk, messagebox
-import os
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget
+from PyQt5.QtCore import Qt
 import threading
 import logging
+import time
+import os
+from transformers import AutoTokenizer
+import openvino_genai as ov_genai
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-def handle_exception(e, console_callback=None, prefix="错误"):
-    msg = f"{prefix}: {str(e)}\n\n"
-    logging.error(msg)
-    if console_callback:
-        console_callback(msg)
-
 MODEL_LIST = ['TinyLlama-1.1B', 'DeepSeek-1.5B']
 QUANTIZATION_LIST = ['int4', 'int8']
 DEVICE_LIST = ['CPU', 'GPU', 'NPU']
 
-
 class LLMChatManager:
-    def clear_history(self):
-        self.chat_history = []
-
     def __init__(self):
         self.pipe = None
         self.tokenizer = None
+        self.chat_history = []
+
+    def clear_history(self):
         self.chat_history = []
 
     def load_model(self, model_name, quant, device, console_callback=None):
@@ -64,7 +58,7 @@ class LLMChatManager:
         except Exception as e:
             self.pipe = None
             self.tokenizer = None
-            handle_exception(e, console_callback, prefix="模型加载失败")
+            self.handle_exception(e, console_callback, prefix="模型加载失败")
             return False
 
     def unload_model(self, console_callback=None):
@@ -76,7 +70,7 @@ class LLMChatManager:
             logging.info("模型已成功卸载！")
             return True
         except Exception as e:
-            handle_exception(e, console_callback, prefix="模型卸载失败")
+            self.handle_exception(e, console_callback, prefix="模型卸载失败")
             return False
 
     def build_prompt(self, user_input, model_name):
@@ -101,22 +95,17 @@ class LLMChatManager:
                 add_generation_prompt=True
             )
         except Exception as e:
-            handle_exception(e, prefix="Prompt 构建失败")
+            self.handle_exception(e, prefix="Prompt 构建失败")
             return f"<|user|>\n{user_input}\n<|assistant|>\n"
 
     def generate_reply(self, prompt, max_new_tokens=512):
         if not self.pipe:
             err = RuntimeError("模型未加载")
-            handle_exception(err)
+            self.handle_exception(err)
             raise err
         try:
-            # 判断当前设备
             device = getattr(self.pipe, 'device', None)
-            # 兼容旧openvino_genai，若无device属性则回退为True
-            if device is not None and str(device).upper() == 'NPU':
-                do_sample = False
-            else:
-                do_sample = True
+            do_sample = False if device and str(device).upper() == 'NPU' else True
             result = self.pipe.generate(
                 [prompt],
                 max_new_tokens=max_new_tokens,
@@ -126,7 +115,7 @@ class LLMChatManager:
             logging.info(f"推理完成，tokens: {max_new_tokens}, do_sample: {do_sample}")
             return result
         except Exception as e:
-            handle_exception(e, prefix="推理失败")
+            self.handle_exception(e, prefix="推理失败")
             raise
 
     def append_history(self, user_input, assistant_output):
@@ -135,152 +124,159 @@ class LLMChatManager:
         if len(self.chat_history) > 6:
             self.chat_history = self.chat_history[-6:]
 
-# GUI 主程序
-def start_gui():
-    def do_clear_history():
-        manager.clear_history()
-        console_callback("上下文已清空\n\n")
-        update_send_button()
+    def handle_exception(self, e, console_callback=None, prefix="错误"):
+        msg = f"{prefix}: {str(e)}\n\n"
+        logging.error(msg)
+        if console_callback:
+            console_callback(msg)
 
-    manager = LLMChatManager()
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.manager = LLMChatManager()
+        self.init_ui()
 
-    def toggle_buttons(is_loaded):
-        if is_loaded:
-            load_button.grid_remove()
-            unload_button.grid()
-            model_menu.config(state=tk.DISABLED)
-            quant_menu.config(state=tk.DISABLED)
-            device_menu.config(state=tk.DISABLED)
-        else:
-            unload_button.grid_remove()
-            load_button.grid()
-            model_menu.config(state=tk.NORMAL)
-            quant_menu.config(state=tk.NORMAL)
-            device_menu.config(state=tk.NORMAL)
+    def init_ui(self):
+        self.setWindowTitle("LLM 聊天助手")
+        self.setGeometry(100, 100, 1600, 1200)  # 宽度放大1倍，高度放大2倍
 
-    def console_callback(msg):
-        console_display.insert(tk.END, msg)
-        console_display.see(tk.END)
-        root.update()
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-    def chat_callback(msg):
-        chat_display.insert(tk.END, msg)
-        chat_display.see(tk.END)
-        root.update()
+        layout = QVBoxLayout()
+        central_widget.setLayout(layout)
 
-    def do_load_model():
+        # Model selection
+        model_layout = QHBoxLayout()
+        layout.addLayout(model_layout)
+
+        model_label = QLabel("选择模型:")
+        model_layout.addWidget(model_label)
+
+        self.model_combo = QComboBox()
+        self.model_combo.addItems(MODEL_LIST)
+        model_layout.addWidget(self.model_combo)
+
+        quant_label = QLabel("量化精度:")
+        model_layout.addWidget(quant_label)
+
+        self.quant_combo = QComboBox()
+        self.quant_combo.addItems(QUANTIZATION_LIST)
+        model_layout.addWidget(self.quant_combo)
+
+        device_label = QLabel("选择设备:")
+        model_layout.addWidget(device_label)
+
+        self.device_combo = QComboBox()
+        self.device_combo.addItems(DEVICE_LIST)
+        model_layout.addWidget(self.device_combo)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        layout.addLayout(button_layout)
+
+        self.load_button = QPushButton("加载模型")
+        self.load_button.clicked.connect(self.do_load_model)
+        button_layout.addWidget(self.load_button)
+
+        self.unload_button = QPushButton("卸载模型")
+        self.unload_button.clicked.connect(self.do_unload_model)
+        self.unload_button.setEnabled(False)
+        button_layout.addWidget(self.unload_button)
+
+        self.clear_button = QPushButton("清空上下文")
+        self.clear_button.clicked.connect(self.do_clear_history)
+        self.clear_button.setEnabled(False)
+        button_layout.addWidget(self.clear_button)
+
+        # Chat display
+        self.chat_display = QTextEdit()
+        self.chat_display.setReadOnly(True)
+        layout.addWidget(self.chat_display)
+
+        # Console display
+        self.console_display = QTextEdit()
+        self.console_display.setReadOnly(True)
+        self.console_display.setStyleSheet("background-color: lightgray;")
+        layout.addWidget(self.console_display)
+
+        # User input
+        input_layout = QHBoxLayout()
+        layout.addLayout(input_layout)
+
+        self.user_input = QLineEdit()
+        self.user_input.textChanged.connect(self.update_send_button)
+        input_layout.addWidget(self.user_input)
+
+        self.send_button = QPushButton("发送")
+        self.send_button.clicked.connect(self.do_send_message)
+        self.send_button.setEnabled(False)
+        input_layout.addWidget(self.send_button)
+
+    def console_callback(self, msg):
+        self.console_display.append(msg)
+
+    def chat_callback(self, msg):
+        self.chat_display.append(msg)
+
+    def update_send_button(self):
+        is_enabled = bool(self.user_input.text().strip()) and self.manager.pipe is not None
+        self.send_button.setEnabled(is_enabled)
+        self.user_input.setEnabled(self.manager.pipe is not None)
+        self.clear_button.setEnabled(self.manager.pipe is not None)
+
+    def do_load_model(self):
         def load():
-            selected_model = model_var.get()
-            selected_quant = quant_var.get()
-            selected_device = device_var.get()
-            # 加载前先禁用按钮，防止重复点击
-            root.after(0, lambda: toggle_buttons(False))
-            root.after(0, lambda: update_send_button())
-            # 分阶段输出，防止界面假死
-            def safe_console(msg):
-                root.after(0, lambda: console_callback(msg))
-            success = manager.load_model(selected_model, selected_quant, selected_device, safe_console)
-            root.after(0, lambda: toggle_buttons(success))
-            root.after(0, update_send_button)
+            selected_model = self.model_combo.currentText()
+            selected_quant = self.quant_combo.currentText()
+            selected_device = self.device_combo.currentText()
+            self.load_button.setEnabled(False)
+            self.console_callback("开始加载模型......\n")
+            success = self.manager.load_model(selected_model, selected_quant, selected_device, self.console_callback)
+            self.load_button.setEnabled(not success)
+            self.unload_button.setEnabled(success)
+            self.update_send_button()
+
         threading.Thread(target=load, daemon=True).start()
 
-    def do_unload_model():
-        manager.unload_model(console_callback)
-        toggle_buttons(False)
-        update_send_button()
+    def do_unload_model(self):
+        self.manager.unload_model(self.console_callback)
+        self.load_button.setEnabled(True)
+        self.unload_button.setEnabled(False)
+        self.update_send_button()
 
-    def do_send_message():
+    def do_clear_history(self):
+        self.manager.clear_history()
+        self.console_callback("上下文已清空\n\n")
+        self.update_send_button()
+
+    def do_send_message(self):
         def send():
-            user_input = user_entry.get()
+            user_input = self.user_input.text()
             if user_input.strip().lower() == 'quit':
-                root.destroy()
+                self.close()
                 return
-            chat_callback(f"用户: {user_input}\n\n")
-            user_entry.delete(0, tk.END)
-            send_button.config(state=tk.DISABLED)
-            console_callback("消息成功发送，等待输出中......\n")
+            self.chat_callback(f"用户: {user_input}\n\n")
+            self.user_input.clear()
+            self.send_button.setEnabled(False)
+            self.console_callback("消息成功发送，等待输出中......\n")
             try:
-                selected_model = model_var.get()
-                prompt = manager.build_prompt(user_input, selected_model)
-                result = manager.generate_reply(prompt)
+                selected_model = self.model_combo.currentText()
+                prompt = self.manager.build_prompt(user_input, selected_model)
+                result = self.manager.generate_reply(prompt)
                 perf_metrics = result.perf_metrics
-                chat_callback(f"助手: {result}\n\n")
-                console_callback(f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
-                manager.append_history(user_input, result)
+                self.chat_callback(f"助手: {result}\n\n")
+                self.console_callback(f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
+                self.manager.append_history(user_input, result)
             except Exception as e:
-                chat_callback(f"助手: 无法生成回复，错误: {str(e)}\n\n")
+                self.chat_callback(f"助手: 无法生成回复，错误: {str(e)}\n\n")
             finally:
-                update_send_button()
+                self.update_send_button()
+
         threading.Thread(target=send, daemon=True).start()
 
-    def update_send_button(*args):
-        is_enabled = user_entry.get().strip() and manager.pipe
-        send_button.config(state=tk.NORMAL if is_enabled else tk.DISABLED)
-        user_entry.config(state=tk.NORMAL if manager.pipe else tk.DISABLED)
-        clear_button.config(state=tk.NORMAL if manager.pipe else tk.DISABLED)
-
-    def on_closing():
-        manager.unload_model()
-        root.destroy()
-
-    root = tk.Tk()
-    root.title("LLM 聊天助手")
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-
-    tk.Label(root, text="选择模型:").grid(row=0, column=0, padx=10, pady=10)
-    model_var = tk.StringVar(value=MODEL_LIST[0])
-    def update_model_menu():
-        menu = model_menu['menu']
-        menu.delete(0, 'end')
-        for m in MODEL_LIST:
-            menu.add_command(label=m, command=tk._setit(model_var, m))
-        model_var.set(MODEL_LIST[0])
-
-    model_menu = ttk.OptionMenu(root, model_var, MODEL_LIST[0], *MODEL_LIST)
-    model_menu.grid(row=0, column=1, padx=10, pady=10)
-
-    tk.Label(root, text="量化精度:").grid(row=1, column=0, padx=10, pady=10)
-    quant_var = tk.StringVar(value=QUANTIZATION_LIST[0])
-    quant_menu = ttk.OptionMenu(root, quant_var, QUANTIZATION_LIST[0], *QUANTIZATION_LIST)
-    quant_menu.grid(row=1, column=1, padx=10, pady=10)
-
-    tk.Label(root, text="选择设备:").grid(row=2, column=0, padx=10, pady=10)
-    device_var = tk.StringVar(value=DEVICE_LIST[0])
-    device_menu = ttk.OptionMenu(root, device_var, DEVICE_LIST[0], *DEVICE_LIST)
-    device_menu.config(width=12)
-    device_menu.grid(row=2, column=1, padx=10, pady=10)
-
-
-    load_button = ttk.Button(root, text="加载模型", command=do_load_model)
-    load_button.grid(row=3, column=0, columnspan=2, pady=10)
-
-    unload_button = ttk.Button(root, text="卸载模型", command=do_unload_model)
-    unload_button.grid(row=4, column=0, columnspan=2, pady=10)
-    unload_button.grid_remove()
-
-    clear_button = ttk.Button(root, text="清空上下文", command=do_clear_history, state=tk.DISABLED)
-    clear_button.grid(row=5, column=0, columnspan=2, pady=5)
-
-
-
-    # 增大宽度 10%
-    chat_display = tk.Text(root, height=15, width=55, state=tk.NORMAL)
-    chat_display.grid(row=6, column=0, columnspan=2, padx=12, pady=10)
-
-    console_display = tk.Text(root, height=10, width=55, state=tk.NORMAL, bg="lightgray")
-    console_display.grid(row=7, column=0, columnspan=2, padx=12, pady=10)
-
-    user_entry = ttk.Entry(root, width=44)
-    user_entry.grid(row=8, column=0, padx=12, pady=10)
-    user_entry.bind("<KeyRelease>", lambda event: update_send_button())
-    user_entry.bind("<FocusIn>", lambda event: update_send_button())
-
-    send_button = ttk.Button(root, text="发送", command=do_send_message, state=tk.DISABLED)
-    send_button.grid(row=8, column=1, padx=12, pady=10)
-
-    update_model_menu()
-
-    root.mainloop()
-
 if __name__ == "__main__":
-    start_gui()
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec_()
