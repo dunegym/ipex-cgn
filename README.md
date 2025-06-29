@@ -37,7 +37,9 @@ conda activate openvino-cgn
 #### 第五步：安装依赖
 ```bash
 pip install nncf==2.14.1 onnx==1.17.0 optimum-intel==1.22.0
-pip install openvino==2025.1 openvino-tokenizers==2025.1 openvino-genai==2025.1
+pip install openvino==2025.1 openvino-tokenizers==2025.1
+openvino-genai==2025.1
+pip install PyQt5
 ```
 
 #### 第六步：运行主程序

@@ -146,6 +146,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         central_widget.setLayout(layout)
 
+        font = self.font()
+        font.setPointSize(int(font.pointSize() * 1.3))  # 字体放大0.3倍，确保为整数
+        self.setFont(font)
+
         # Model selection
         model_layout = QHBoxLayout()
         layout.addLayout(model_layout)
