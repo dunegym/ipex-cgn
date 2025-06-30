@@ -15,7 +15,7 @@ logging.basicConfig(
 
 MODEL_LIST = ['TinyLlama-1.1B', 'DeepSeek-1.5B']
 QUANTIZATION_LIST = ['int4', 'int8']
-DEVICE_LIST = ['CPU', 'GPU', 'NPU']
+DEVICE_LIST = ['CPU', 'GPU']
 
 class LLMChatManager:
     def __init__(self):
@@ -39,7 +39,7 @@ class LLMChatManager:
                     model_dir,
                     device,
                     CACHE_DIR=f".npucache/{model_name}-{quant}",
-                    MAX_PROMPT_LEN=2048
+                    MAX_PROMPT_LEN=4096
                 )
             else:
                 self.pipe = ov_genai.LLMPipeline(model_dir, device)
@@ -98,7 +98,7 @@ class LLMChatManager:
             self.handle_exception(e, prefix="Prompt 构建失败")
             return f"<|user|>\n{user_input}\n<|assistant|>\n"
 
-    def generate_reply(self, prompt, max_new_tokens=512):
+    def generate_reply(self, prompt, window, max_new_tokens=2048):
         if not self.pipe:
             err = RuntimeError("模型未加载")
             self.handle_exception(err)
@@ -106,8 +106,10 @@ class LLMChatManager:
         try:
             device = getattr(self.pipe, 'device', None)
             do_sample = False if device and str(device).upper() == 'NPU' else True
+            streamer = lambda x: window.chat_callback(x)
             result = self.pipe.generate(
                 [prompt],
+                streamer=streamer,
                 max_new_tokens=max_new_tokens,
                 do_sample=do_sample,
                 use_cache=True
@@ -221,7 +223,7 @@ class MainWindow(QMainWindow):
         self.console_display.append(msg)
 
     def chat_callback(self, msg):
-        self.chat_display.append(msg)
+        self.chat_display.insertPlainText(msg)
 
     def update_send_button(self):
         is_enabled = bool(self.user_input.text().strip()) and self.manager.pipe is not None
@@ -260,16 +262,16 @@ class MainWindow(QMainWindow):
             if user_input.strip().lower() == 'quit':
                 self.close()
                 return
-            self.chat_callback(f"用户: {user_input}\n\n")
+            self.chat_callback(f"\n\n用户: \n{user_input}\n")
             self.user_input.clear()
             self.send_button.setEnabled(False)
             self.console_callback("消息成功发送，等待输出中......\n")
             try:
                 selected_model = self.model_combo.currentText()
                 prompt = self.manager.build_prompt(user_input, selected_model)
-                result = self.manager.generate_reply(prompt)
+                self.chat_callback("\n助手: \n")
+                result = self.manager.generate_reply(prompt, self)
                 perf_metrics = result.perf_metrics
-                self.chat_callback(f"助手: {result}\n\n")
                 self.console_callback(f"已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
                 self.manager.append_history(user_input, result)
             except Exception as e:
