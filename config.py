@@ -1,7 +1,7 @@
 import logging
 
-MODEL_LIST = ['DeepSeek-R1']
-QUANTIZATION_LIST = ['int4', 'int8']
+MODEL_LIST = ['DeepSeek-R1-1.5B']
+QUANTIZATION_LIST = ['int8', 'nf4', 'int4']
 DEVICE_LIST = ['CPU', 'GPU']
 
 logging.basicConfig(

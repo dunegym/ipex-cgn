@@ -1,5 +1,4 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget
-from PyQt5.QtCore import Qt
 import threading
 import time
 import os
@@ -63,13 +62,13 @@ class LLMChatManager:
 
     def load_model(self, model_name, quant, device, console_callback=None):
         # 加载指定的模型
-        model_dir = f"model/{model_name}-{quant}"
+        model_dir = f"model/{model_name}/{quant}"  # 更新路径结构
         logging.info(f"开始加载模型: {model_name}, 量化精度: {quant}, 设备: {device}")
         if console_callback:
             console_callback('Loading......\n')
             # 添加短暂延时确保信号处理
             time.sleep(0.1)
-            
+        
         try:
             start_time = time.time()
             if console_callback:
@@ -92,7 +91,7 @@ class LLMChatManager:
                 self.pipe = ov_genai.LLMPipeline(
                     model_dir,
                     device,
-                    CACHE_DIR=f".npucache/{model_name}-{quant}",
+                    CACHE_DIR=f".npucache/{model_name}/{quant}",  # 更新缓存路径结构
                     MAX_PROMPT_LEN=4096
                 )
             else:
@@ -144,12 +143,12 @@ class LLMChatManager:
         # 构建聊天提示
         model_dir = None
         for quant in QUANTIZATION_LIST:
-            candidate = f"model/{model_name}-{quant}"
+            candidate = f"model/{model_name}/{quant}"  # 更新路径结构
             if os.path.isdir(candidate):
                 model_dir = candidate
                 break
         if model_dir is None:
-            model_dir = f"model/{model_name}-int4"  # 默认使用int4量化模型
+            model_dir = f"model/{model_name}/int4"  # 默认使用int4量化模型
 
         try:
             n = len(self.chat_history)
@@ -260,29 +259,24 @@ class MainWindow(QMainWindow):
         self.device_combo.addItems(DEVICE_LIST)  # 添加设备列表
         model_layout.addWidget(self.device_combo)
 
-        # 按钮部分
-        button_layout = QHBoxLayout()
-        layout.addLayout(button_layout)
-
-        self.load_button = QPushButton("加载模型")
-        self.load_button.clicked.connect(self.do_load_model)  # 绑定加载模型事件
-        button_layout.addWidget(self.load_button)
-
-        self.unload_button = QPushButton("卸载模型")
-        self.unload_button.clicked.connect(self.do_unload_model)  # 绑定卸载模型事件
-        self.unload_button.setEnabled(False)
-        button_layout.addWidget(self.unload_button)
-
-        self.clear_button = QPushButton("清空上下文")
-        self.clear_button.clicked.connect(self.do_clear_history)  # 绑定清空上下文事件
-        self.clear_button.setEnabled(False)
-        button_layout.addWidget(self.clear_button)
-
         # 聊天显示部分
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)  # 设置为只读
         layout.addWidget(self.chat_display)
         self.chat_display.setStyleSheet("color: black;")
+
+        # 按钮部分 - 移动到聊天框和控制台之间
+        button_layout = QHBoxLayout()
+        layout.addLayout(button_layout)
+
+        self.load_unload_button = QPushButton("加载模型")
+        self.load_unload_button.clicked.connect(self.toggle_model)  # 绑定新的切换事件
+        button_layout.addWidget(self.load_unload_button)
+
+        self.clear_button = QPushButton("清空上下文")
+        self.clear_button.clicked.connect(self.do_clear_history)  # 绑定清空上下文事件
+        self.clear_button.setEnabled(False)
+        button_layout.addWidget(self.clear_button)
 
         # 控制台显示部分
         self.console_display = QTextEdit()
@@ -303,31 +297,15 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(False)
         input_layout.addWidget(self.send_button)
         
-        # 添加日志文件路径显示
-        log_path_layout = QHBoxLayout()
-        layout.addLayout(log_path_layout)
-        
-        log_path_label = QLabel("日志文件:")
-        log_path_layout.addWidget(log_path_label)
-        
-        self.log_path_display = QLineEdit()
-        self.log_path_display.setText(log_file_path)
-        self.log_path_display.setReadOnly(True)
-        log_path_layout.addWidget(self.log_path_display)
-        
-        open_log_button = QPushButton("打开日志目录")
-        open_log_button.clicked.connect(self.open_log_directory)
-        log_path_layout.addWidget(open_log_button)
-
-    # 添加一个打开日志目录的方法
-    def open_log_directory(self):
-        log_dir = os.path.dirname(log_file_path)
-        if os.path.exists(log_dir):
-            # 在Windows上打开文件夹
-            os.startfile(log_dir)
+    def toggle_model(self):
+        # 根据当前状态决定是加载还是卸载模型
+        if self.manager.pipe is None:
+            # 如果模型未加载，则加载模型
+            self.do_load_model()
         else:
-            self.console_callback("日志目录不存在\n")
-        
+            # 如果模型已加载，则卸载模型
+            self.do_unload_model()
+
     def update_console(self, msg):
         self.console_display.append(msg)
         # 确保滚动到最新内容
@@ -341,8 +319,9 @@ class MainWindow(QMainWindow):
         self.chat_display.insertPlainText(msg)
 
     def update_ui_state(self, model_loaded):
-        self.load_button.setEnabled(not model_loaded)
-        self.unload_button.setEnabled(model_loaded)
+        # 更新合并后按钮的文本和状态
+        self.load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
+        self.load_unload_button.setEnabled(True)  # 操作完成后启用按钮
         self.clear_button.setEnabled(model_loaded)
         self.user_input.setEnabled(model_loaded)
         self.update_send_button()
@@ -361,23 +340,17 @@ class MainWindow(QMainWindow):
         self.clear_button.setEnabled(self.manager.pipe is not None)
 
     def do_load_model(self):
-        # 首先禁用相关按钮，防止重复点击
-        self.load_button.setEnabled(False)
+        # 首先禁用按钮，防止重复点击
+        self.load_unload_button.setEnabled(False)
+        self.load_unload_button.setText("正在加载...")
         self.console_signal.emit("开始加载模型......\n")
         
         # 设置一个标志来控制加载状态指示器
         self.loading_active = True
         
-        # 创建一个独立线程来显示加载状态
-        def loading_indicator():
-            pass  # 删除模型加载中提示代码
-
-        # 启动加载状态指示器线程
-        indicator_thread = threading.Thread(target=loading_indicator, daemon=True)
-        indicator_thread.start()
-        
         # 实际加载模型的线程
         def load():
+            success = False
             try:
                 selected_model = self.model_combo.currentText()
                 selected_quant = self.quant_combo.currentText()
@@ -397,13 +370,18 @@ class MainWindow(QMainWindow):
                 self.update_ui_signal.emit(success)
         
         threading.Thread(target=load, daemon=True).start()
+
     def do_unload_model(self):
+        # 禁用按钮并更新文本
+        self.load_unload_button.setEnabled(False)
+        self.load_unload_button.setText("正在卸载...")
+        
         # 卸载模型的逻辑
         self.manager.unload_model(self.console_callback)
-        self.load_button.setEnabled(True)
-        self.unload_button.setEnabled(False)
-        self.update_send_button()
-
+        
+        # 更新UI状态
+        self.update_ui_signal.emit(False)  # 传递False表示模型已卸载
+        
     def do_clear_history(self):
         # 清空聊天历史记录的逻辑
         self.manager.clear_history()
