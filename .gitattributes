@@ -1,3 +1,4 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
-model/DeepSeek-R1-int4/** filter=lfs diff=lfs merge=lfs -text
-model/DeepSeek-R1-int8/** filter=lfs diff=lfs merge=lfs -text
+model/DeepSeek-R1-1.5B/int4/** filter=lfs diff=lfs merge=lfs -text
+model/DeepSeek-R1-1.5B/int8/** filter=lfs diff=lfs merge=lfs -text
+model/DeepSeek-R1-1.5B/nf4/** filter=lfs diff=lfs merge=lfs -text
