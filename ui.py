@@ -1,9 +1,10 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget
-from PyQt5.QtCore import pyqtSignal, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget
+from PyQt5.QtCore import pyqtSignal, QTimer, Qt
 import threading
 import time
 import logging
-from config import MODEL_LIST, QUANTIZATION_LIST, DEVICE_LIST
+import os
+from config import LLM_MODEL_LIST, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST
 
 class MainWindow(QMainWindow):
     console_signal = pyqtSignal(str)
@@ -14,26 +15,96 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.manager = manager  # 传入聊天管理器
         self.loading_active = False  # 添加加载状态标志
+        self.available_models = self.get_available_models()  # 获取可用的模型列表
         self.init_ui()  # 初始化用户界面
         # 连接信号到槽
         self.console_signal.connect(self.update_console)
         self.chat_signal.connect(self.update_chat)
         self.update_ui_signal.connect(self.update_ui_state)
 
+    def get_available_models(self):
+        """检查model文件夹下实际存在的模型"""
+        available_models = []
+        model_dir = os.path.join(os.path.dirname(__file__), 'model')
+        
+        # 如果model文件夹不存在，返回空列表
+        if not os.path.exists(model_dir):
+            logging.warning(f"模型文件夹不存在: {model_dir}")
+            return available_models
+        
+        # 遍历配置文件中的模型列表
+        for model_name in LLM_MODEL_LIST:
+            model_path = os.path.join(model_dir, model_name)
+            # 检查模型文件夹是否存在
+            if os.path.exists(model_path) and os.path.isdir(model_path):
+                available_models.append(model_name)
+                logging.info(f"发现可用模型: {model_name}")
+            else:
+                logging.info(f"模型不存在: {model_name}")
+        
+        if not available_models:
+            logging.warning("未找到任何可用模型")
+        
+        return available_models
+
     def init_ui(self):
         # 设置窗口标题和大小
         self.setWindowTitle("LLM 聊天助手")
-        self.setGeometry(100, 100, 1600, 1200)  # 宽度放大1倍，高度放大2倍
+        self.setGeometry(100, 100, 1600, 1200)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        layout = QVBoxLayout()
-        central_widget.setLayout(layout)
+        # 主布局
+        main_layout = QVBoxLayout(central_widget)
 
         font = self.font()
         font.setPointSize(int(font.pointSize() * 1.3))  # 字体放大0.3倍，确保为整数
         self.setFont(font)
+
+        # 顶部导航栏
+        nav_layout = QHBoxLayout()
+        self.text_to_text_button = QPushButton("文生文")
+        self.text_to_image_button = QPushButton("文生图")
+        self.image_to_text_button = QPushButton("图生文")
+        self.speech_rec_button = QPushButton("语音识别")
+        
+        nav_layout.addWidget(self.text_to_text_button)
+        nav_layout.addWidget(self.text_to_image_button)
+        nav_layout.addWidget(self.image_to_text_button)
+        nav_layout.addWidget(self.speech_rec_button)
+        
+        main_layout.addLayout(nav_layout)
+
+        # 用于切换页面的堆叠小部件
+        self.stacked_widget = QStackedWidget()
+        main_layout.addWidget(self.stacked_widget)
+
+        # 创建页面
+        self.text_to_text_page = self.create_text_to_text_page()
+        self.text_to_image_page = self.create_placeholder_page("文生图功能开发中...")
+        self.image_to_text_page = self.create_placeholder_page("图生文功能开发中...")
+        self.speech_rec_page = self.create_placeholder_page("语音识别功能开发中...")
+
+        # 将页面添加到堆叠小部件
+        self.stacked_widget.addWidget(self.text_to_text_page)
+        self.stacked_widget.addWidget(self.text_to_image_page)
+        self.stacked_widget.addWidget(self.image_to_text_page)
+        self.stacked_widget.addWidget(self.speech_rec_page)
+
+        # 连接导航按钮
+        self.text_to_text_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        self.text_to_image_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        self.image_to_text_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+        self.speech_rec_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
+
+        # 设置默认页面
+        self.stacked_widget.setCurrentIndex(0)
+
+    def create_text_to_text_page(self):
+        """创建文生文页面"""
+        page_widget = QWidget()
+        layout = QVBoxLayout(page_widget)
 
         # 模型选择部分
         model_layout = QHBoxLayout()
@@ -43,21 +114,26 @@ class MainWindow(QMainWindow):
         model_layout.addWidget(model_label)
 
         self.model_combo = QComboBox()
-        self.model_combo.addItems(MODEL_LIST)  # 添加模型列表
+        # 使用动态获取的可用模型列表
+        if self.available_models:
+            self.model_combo.addItems(self.available_models)
+        else:
+            self.model_combo.addItem("无可用模型")
+            self.model_combo.setEnabled(False)
         model_layout.addWidget(self.model_combo)
 
         quant_label = QLabel("量化精度:")
         model_layout.addWidget(quant_label)
 
         self.quant_combo = QComboBox()
-        self.quant_combo.addItems(QUANTIZATION_LIST)  # 添加量化精度列表
+        self.quant_combo.addItems(LLM_QUANTIZATION_LIST)  # 添加量化精度列表
         model_layout.addWidget(self.quant_combo)
 
         device_label = QLabel("选择设备:")
         model_layout.addWidget(device_label)
 
         self.device_combo = QComboBox()
-        self.device_combo.addItems(DEVICE_LIST)  # 添加设备列表
+        self.device_combo.addItems(LLM_DEVICE_LIST)  # 添加设备列表
         model_layout.addWidget(self.device_combo)
 
         # 聊天显示部分
@@ -79,9 +155,12 @@ class MainWindow(QMainWindow):
         self.clear_button.setEnabled(False)
         button_layout.addWidget(self.clear_button)
         
-        # 添加下载模型按钮
+        # 刷新模型按钮 - 移动到这里
+        self.refresh_button = QPushButton("刷新模型")
+        self.refresh_button.clicked.connect(self.refresh_model_list)
+        button_layout.addWidget(self.refresh_button)
+        
         self.download_button = QPushButton("下载模型")
-        # self.download_button.clicked.connect(self.do_download_model)  # 绑定下载模型事件
         button_layout.addWidget(self.download_button)
 
         # 控制台显示部分
@@ -102,6 +181,17 @@ class MainWindow(QMainWindow):
         self.send_button.clicked.connect(self.do_send_message)  # 绑定发送消息事件
         self.send_button.setEnabled(False)
         input_layout.addWidget(self.send_button)
+        
+        return page_widget
+
+    def create_placeholder_page(self, text):
+        """为正在开发的功能创建占位页面"""
+        page_widget = QWidget()
+        layout = QVBoxLayout(page_widget)
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        return page_widget
         
     def toggle_model(self):
         # 根据当前状态决定是加载还是卸载模型
@@ -216,6 +306,24 @@ class MainWindow(QMainWindow):
                 self.update_send_button()
 
         threading.Thread(target=send, daemon=True).start()
+
+    def refresh_model_list(self):
+        """刷新模型列表"""
+        # 重新获取可用模型
+        self.available_models = self.get_available_models()
+        
+        # 清空当前下拉框
+        self.model_combo.clear()
+        
+        # 重新填充下拉框
+        if self.available_models:
+            self.model_combo.addItems(self.available_models)
+            self.model_combo.setEnabled(True)
+            self.console_callback(f"模型列表已刷新，找到 {len(self.available_models)} 个可用模型\n")
+        else:
+            self.model_combo.addItem("无可用模型")
+            self.model_combo.setEnabled(False)
+            self.console_callback("未找到任何可用模型，请检查model文件夹\n")
 
     def closeEvent(self, event):
         # 在程序关闭前卸载模型并释放资源

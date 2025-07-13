@@ -1,12 +1,29 @@
 import logging
 
-LLM_MODEL_LIST = ['DeepSeek-R1-1.5B']
-LLM_DOWNLOAD_LIST = ['Qwen2.5-3B', 
-                     'Qwen2.5-Coder-3B', 
-                     'DeepSeek-R1-7B']
-QUANTIZATION_LIST = ['int8', 
-                     'int4']
-DEVICE_LIST = ['CPU', 'GPU']
+LLM_MODEL_LIST = [
+    'DeepSeek-R1-1.5B',
+    'DeepSeek-R1-7B',
+    'Qwen2.5-3B', 
+    'Qwen2.5-Coder-3B'
+]
+LLM_QUANTIZATION_LIST = [
+    'int8', 
+    'int4'
+]
+LLM_DEVICE_LIST = [
+    'CPU', 
+    'GPU'
+]
+T2I_MODEL_LIST = [
+    'dreamlike-anime-1',
+    'dreamlike-photoreal-2',
+    'dreamlike-diffusion-1'
+]
+T2I_QUANTIZATION_LIST = [
+    'fp16',
+    'int8'
+]
+
 
 
 logging.basicConfig(

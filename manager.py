@@ -3,7 +3,7 @@ import time
 import logging
 from transformers import AutoTokenizer
 import openvino_genai as ov_genai
-from config import QUANTIZATION_LIST
+from config import LLM_QUANTIZATION_LIST
 
 class LLMChatManager:
     """管理LLM聊天的类"""
@@ -99,7 +99,7 @@ class LLMChatManager:
     def build_prompt(self, user_input, model_name):
         """构建聊天提示"""
         model_dir = None
-        for quant in QUANTIZATION_LIST:
+        for quant in LLM_QUANTIZATION_LIST:
             candidate = f"model/{model_name}/{quant}"  # 更新路径结构
             if os.path.isdir(candidate):
                 model_dir = candidate
