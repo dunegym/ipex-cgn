@@ -15,9 +15,9 @@ LLM_DEVICE_LIST = [
     'GPU'
 ]
 T2I_MODEL_LIST = [
-    'dreamlike-anime-1',
-    'dreamlike-photoreal-2',
-    'dreamlike-diffusion-1'
+    'dreamlike-anime',
+    'dreamlike-photoreal',
+    'dreamlike-diffusion'
 ]
 T2I_QUANTIZATION_LIST = [
     'fp16',

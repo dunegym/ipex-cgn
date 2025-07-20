@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <hetero>
+        <device_mapping>
+            <!-- 文本编码器在 CPU 上运行（显存占用小，CPU 足够） -->
+            <mapping pattern=".*text_encoder.*" device="CPU"/>
+            <mapping pattern=".*clip.*" device="CPU"/>
+            
+            <!-- 注意力机制组件优先使用 GPU（计算密集） -->
+            <mapping pattern=".*attention.*" device="GPU" priority="high"/>
+            <mapping pattern=".*self_attn.*" device="GPU" priority="high"/>
+            <mapping pattern=".*cross_attn.*" device="GPU" priority="high"/>
+            
+            <!-- UNet 核心模块在 GPU 上运行 -->
+            <mapping pattern=".*unet.*downsample.*" device="GPU" priority="high"/>
+            <mapping pattern=".*unet.*upsample.*" device="GPU" priority="high"/>
+            <mapping pattern=".*unet.*middle_block.*" device="GPU" priority="high"/>
+            <mapping pattern=".*unet.*" device="GPU"/>
+            
+            <!-- VAE 编码器/解码器分离配置 -->
+            <mapping pattern=".*vae.*encoder.*" device="GPU" priority="medium"/>
+            <mapping pattern=".*vae.*decoder.*" device="GPU" priority="high"/>
+            <mapping pattern=".*vae.*" device="GPU"/>
+            
+            <!-- 调度器相关组件可以在 CPU 上运行 -->
+            <mapping pattern=".*scheduler.*" device="CPU"/>
+            <mapping pattern=".*sampler.*" device="CPU"/>
+            
+            <!-- 其他层默认使用 GPU -->
+            <mapping pattern=".*" device="GPU" priority="low"/>
+        </device_mapping>
+        
+        <memory_management>
+            <!-- 启用内存优化 -->
+            <enable_memory_efficient_attention>true</enable_memory_efficient_attention>
+            <gradient_checkpointing>true</gradient_checkpointing>
+            <cpu_offload_threshold>0.8</cpu_offload_threshold>
+        </memory_management>
+        
+        <performance_tuning>
+            <!-- 批处理优化 -->
+            <batch_size_optimization>true</batch_size_optimization>
+            <dynamic_batching>true</dynamic_batching>
+            
+            <!-- 异步执行 -->
+            <async_execution>true</async_execution>
+            <pipeline_parallelism>true</pipeline_parallelism>
+        </performance_tuning>
+        
+        <fallback_policy>
+            <primary_device>GPU</primary_device>
+            <fallback_device>CPU</fallback_device>
+            <memory_threshold>0.9</memory_threshold>
+            <auto_fallback>true</auto_fallback>
+        </fallback_policy>
+    </hetero>
+</config>

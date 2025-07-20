@@ -5,7 +5,6 @@ import sys
 
 # 导入自定义模块
 from logger import setup_logger
-from manager import LLMChatManager
 from ui import MainWindow
 
 # 主程序入口
@@ -18,11 +17,8 @@ if __name__ == "__main__":
     # 创建应用程序
     app = QApplication([])
     
-    # 创建模型管理器
-    manager = LLMChatManager()
-    
     # 创建主窗口并传入管理器
-    window = MainWindow(manager)
+    window = MainWindow()
     window.show()
     
     # 设置应用程序退出选项，确保应用完全退出
