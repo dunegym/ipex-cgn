@@ -1,11 +1,91 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, QSpinBox, QScrollArea
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, QSpinBox, QScrollArea, QDialog, QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFont
 import threading
 import logging
 import os
-from config import LLM_MODEL_LIST, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, T2I_MODEL_LIST, T2I_QUANTIZATION_LIST
+from config import LLM_MODEL_DICT, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, T2I_MODEL_DICT, T2I_QUANTIZATION_LIST
 from manager import LLMChatManager, T2IManager
+
+class ModelDownloadDialog(QDialog):
+    """模型下载信息对话框"""
+    def __init__(self, model_dict, model_type, parent=None):
+        super().__init__(parent)
+        self.model_dict = model_dict
+        self.model_type = model_type
+        self.ui_init_download_dialog()
+    
+    def ui_init_download_dialog(self):
+        """初始化下载对话框UI"""
+        self.setWindowTitle(f"{self.model_type}模型下载")
+        self.setGeometry(200, 200, 800, 500)
+        self.setModal(True)  # 设置为模态对话框
+        
+        # 主布局
+        layout = QVBoxLayout(self)
+        
+        # 标题
+        title_label = QLabel(f"{self.model_type}模型下载信息")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 说明文字
+        info_label = QLabel("请复制下载地址到浏览器或下载工具中下载模型文件")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setStyleSheet("color: gray; margin: 10px;")
+        layout.addWidget(info_label)
+        
+        # 创建表格
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["模型名称", "下载地址"])
+        self.table.setRowCount(len(self.model_dict))
+        
+        # 设置表格样式
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
+        
+        # 设置列宽
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        
+        # 填充表格数据
+        for row, (model_name, download_url) in enumerate(self.model_dict.items()):
+            # 模型名称
+            name_item = QTableWidgetItem(model_name)
+            name_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 0, name_item)
+            
+            # 下载地址
+            url_item = QTableWidgetItem(download_url)
+            url_item.setToolTip(download_url)  # 设置提示文本显示完整URL
+            self.table.setItem(row, 1, url_item)
+        
+        layout.addWidget(self.table)
+        
+        # 底部按钮
+        button_layout = QHBoxLayout()
+        
+        close_button = QPushButton("关闭")
+        close_button.clicked.connect(self.close)
+        close_button.setMinimumWidth(100)
+        
+        # 添加弹性空间，让按钮居中
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        # 设置表格行高
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.verticalHeader().setVisible(False)  # 隐藏行号
 
 class MainWindow(QMainWindow):
     llm_console_signal = pyqtSignal(str)     # 改名：LLM控制台信号
@@ -31,6 +111,7 @@ class MainWindow(QMainWindow):
         self.t2i_progress_timer = None
         self.t2i_current_step = 0
         self.t2i_total_steps = 0
+        self.t2i_progress_line_start = -1  # 记录进度行开始位置
         
         self.ui_init()  
         # 连接信号到槽
@@ -55,8 +136,8 @@ class MainWindow(QMainWindow):
             logging.warning(f"[LLM] 模型文件夹不存在: {model_dir}")
             return llm_available_models
         
-        # 遍历配置文件中的LLM模型列表
-        for llm_model_name in LLM_MODEL_LIST:  # 改名：变量名更明确
+        # 遍历配置文件中的LLM模型字典的键
+        for llm_model_name in LLM_MODEL_DICT.keys():  # 修改：从字典的键获取模型名
             llm_model_path = os.path.join(model_dir, llm_model_name)  # 改名
             # 检查模型文件夹是否存在
             if os.path.exists(llm_model_path) and os.path.isdir(llm_model_path):
@@ -82,8 +163,8 @@ class MainWindow(QMainWindow):
             logging.warning(f"[T2I] 模型文件夹不存在: {model_dir}")
             return t2i_available_models
         
-        # 遍历配置文件中的文生图模型列表
-        for t2i_model_name in T2I_MODEL_LIST:  # 改名：变量名更明确
+        # 遍历配置文件中的文生图模型字典的键
+        for t2i_model_name in T2I_MODEL_DICT.keys():  # 修改：从字典的键获取模型名
             t2i_model_path = os.path.join(model_dir, t2i_model_name)  # 改名
             # 检查模型文件夹是否存在
             if os.path.exists(t2i_model_path) and os.path.isdir(t2i_model_path):
@@ -212,6 +293,7 @@ class MainWindow(QMainWindow):
         llm_button_layout.addWidget(self.llm_refresh_button)
         
         self.llm_download_button = QPushButton("下载模型")  # 改名
+        self.llm_download_button.clicked.connect(self.llm_show_download_dialog)  # 连接到新的方法
         llm_button_layout.addWidget(self.llm_download_button)
 
         # 控制台显示部分
@@ -349,6 +431,7 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.t2i_refresh_button)
 
         self.t2i_download_button = QPushButton("下载模型")
+        self.t2i_download_button.clicked.connect(self.t2i_show_download_dialog)  # 连接到新的方法
         button_layout.addWidget(self.t2i_download_button)
 
         # 下方区域：左侧图片预览，右侧控制台
@@ -527,6 +610,85 @@ class MainWindow(QMainWindow):
             self.ui_console_callback("[LLM] 未找到任何可用模型，请检查model文件夹\n")
             logging.warning("[LLM] 刷新后未找到任何可用模型")
 
+    def t2i_refresh_model_list(self):
+        """刷新文生图模型列表"""
+        # 重新获取可用模型
+        self.t2i_available_models = self.ui_get_available_t2i_models()
+        
+        # 清空当前下拉框
+        self.t2i_model_combo.clear()
+        
+        # 重新填充下拉框
+        if self.t2i_available_models:
+            self.t2i_model_combo.addItems(self.t2i_available_models)
+            self.t2i_model_combo.setEnabled(True)
+            self.t2i_console_signal.emit(f"[T2I] 模型列表已刷新，找到 {len(self.t2i_available_models)} 个可用模型\n")
+            logging.info(f"[T2I] 刷新模型列表完成，可用模型: {self.t2i_available_models}")
+        else:
+            self.t2i_model_combo.addItem("无可用模型")
+            self.t2i_model_combo.setEnabled(False)
+            self.t2i_console_signal.emit("[T2I] 未找到任何可用模型，请检查model文件夹\n")
+            logging.warning("[T2I] 刷新后未找到任何可用模型")
+
+    def ui_update_t2i_console(self, msg):
+        """更新文生图控制台显示"""
+        self.t2i_console_display.append(msg)
+        self.t2i_console_display.verticalScrollBar().setValue(
+            self.t2i_console_display.verticalScrollBar().maximum()
+        )
+        QApplication.processEvents()
+
+    def ui_update_t2i_state(self, model_loaded):
+        """更新文生图UI状态"""
+        self.t2i_load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
+        self.t2i_load_unload_button.setEnabled(True)  # 操作完成后启用按钮
+        self.t2i_generate_button.setEnabled(model_loaded)
+
+    def ui_update_t2i_images(self, image_paths):
+        """更新文生图预览区域显示"""
+        # 清空现有预览
+        for i in reversed(range(self.t2i_preview_layout.count())):
+            child = self.t2i_preview_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 显示新生成的图像
+        for image_path in image_paths:
+            try:
+                # 创建图像标签
+                image_label = QLabel()
+                pixmap = QPixmap(image_path)
+                
+                # 调整图像大小以适应预览区
+                scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                image_label.setPixmap(scaled_pixmap)
+                image_label.setAlignment(Qt.AlignCenter)
+                
+                # 添加图像路径作为提示
+                image_label.setToolTip(f"图像路径: {image_path}")
+                
+                # 添加到布局
+                self.t2i_preview_layout.addWidget(image_label)
+                
+            except Exception as e:
+                logging.error(f"显示图像时出错: {str(e)}")
+                error_label = QLabel(f"图像显示失败: {os.path.basename(image_path)}")
+                error_label.setAlignment(Qt.AlignCenter)
+                self.t2i_preview_layout.addWidget(error_label)
+
+    def ui_update_t2i_progress(self, current_step, total_steps):
+        """更新文生图生成进度"""
+        progress_text = f"生成进度: {current_step}/{total_steps} ({current_step/total_steps*100:.1f}%)"
+        
+        # 更新按钮文本显示进度
+        self.t2i_generate_button.setText(progress_text)
+        
+        # 也可以在控制台显示进度（可选）
+        if current_step == 1:  # 第一步时显示开始信息
+            self.t2i_console_signal.emit("开始生成图像...\n")
+        elif current_step == total_steps:  # 最后一步时显示完成信息
+            self.t2i_console_signal.emit("图像生成完成！\n")
+
     # 文生图相关方法
     def t2i_toggle_model(self):
         """切换文生图模型加载/卸载"""
@@ -598,9 +760,6 @@ class MainWindow(QMainWindow):
             self.t2i_generate_button.setText("生成图像")
             return
         
-        # 初始化步数显示
-        self.t2i_progress_signal.emit(0, steps)
-        
         # 生成图像的线程
         def generate():
             try:
@@ -636,89 +795,15 @@ class MainWindow(QMainWindow):
         
         threading.Thread(target=generate, daemon=True).start()
 
-    def t2i_refresh_model_list(self):
-        """刷新文生图模型列表"""
-        self.t2i_available_models = self.ui_get_available_t2i_models()
-        
-        self.t2i_model_combo.clear()
-        
-        if self.t2i_available_models:
-            self.t2i_model_combo.addItems(self.t2i_available_models)
-            self.t2i_model_combo.setEnabled(True)
-            self.t2i_console_signal.emit(f"[T2I] 文生图模型列表已刷新，找到 {len(self.t2i_available_models)} 个可用模型\n")
-            logging.info(f"[T2I] 刷新模型列表完成，可用模型: {self.t2i_available_models}")
-        else:
-            self.t2i_model_combo.addItem("无可用模型")
-            self.t2i_model_combo.setEnabled(False)
-            self.t2i_console_signal.emit("[T2I] 未找到任何可用文生图模型，请检查model文件夹\n")
-            logging.warning("[T2I] 刷新后未找到任何可用模型")
+    def llm_show_download_dialog(self):
+        """显示LLM模型下载对话框"""
+        dialog = ModelDownloadDialog(LLM_MODEL_DICT, "文生文", self)
+        dialog.exec_()  # 使用exec_()显示模态对话框
 
-    # 文生图UI更新方法
-    def ui_update_t2i_console(self, msg):
-        """更新文生图控制台"""
-        self.t2i_console_display.append(msg)
-        self.t2i_console_display.verticalScrollBar().setValue(
-            self.t2i_console_display.verticalScrollBar().maximum()
-        )
-        QApplication.processEvents()
-
-    def ui_update_t2i_state(self, model_loaded):
-        """更新文生图UI状态"""
-        self.t2i_load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
-        self.t2i_load_unload_button.setEnabled(True)
-        self.t2i_generate_button.setEnabled(model_loaded)
-
-    def ui_update_t2i_images(self, image_paths):
-        """更新图片预览区域"""
-        # 清除之前的图片
-        for i in reversed(range(self.t2i_preview_layout.count())):
-            child = self.t2i_preview_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
-        
-        # 添加新图片
-        for image_path in image_paths:
-            if os.path.exists(image_path):
-                label = QLabel()
-                pixmap = QPixmap(image_path)
-                # 缩放图片以适应预览区域
-                scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                label.setPixmap(scaled_pixmap)
-                label.setAlignment(Qt.AlignCenter)
-                self.t2i_preview_layout.addWidget(label)
-                
-                # 添加图片路径标签
-                path_label = QLabel(f"保存路径: {image_path}")
-                path_label.setWordWrap(True)
-                path_label.setStyleSheet("color: gray; font-size: 10px;")
-                self.t2i_preview_layout.addWidget(path_label)
-
-    def ui_update_t2i_progress(self, current_step, total_steps):
-        """更新文生图进度显示 - 仅显示步数"""
-        self.t2i_current_step = current_step
-        self.t2i_total_steps = total_steps
-        
-        if total_steps > 0:
-            # 清除之前的进度行（如果存在）
-            text = self.t2i_console_display.toPlainText()
-            lines = text.split('\n')
-            
-            # 移除之前的进度行
-            while lines and (lines[-1].startswith('生成进度:') or lines[-1].startswith('当前步数:')):
-                lines.pop()
-            
-            # 重新设置文本
-            self.t2i_console_display.setPlainText('\n'.join(lines))
-            
-            # 添加新的步数显示
-            step_text = f"当前步数: {current_step}/{total_steps}"
-            self.t2i_console_display.append(step_text)
-            
-            # 滚动到底部
-            self.t2i_console_display.verticalScrollBar().setValue(
-                self.t2i_console_display.verticalScrollBar().maximum()
-            )
-            QApplication.processEvents()
+    def t2i_show_download_dialog(self):
+        """显示文生图模型下载对话框"""
+        dialog = ModelDownloadDialog(T2I_MODEL_DICT, "文生图", self)
+        dialog.exec_()  # 使用exec_()显示模态对话框
 
     def ui_close_event_handler(self, event):
         # 在程序关闭前卸载模型并释放资源

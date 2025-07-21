@@ -1,11 +1,11 @@
 import logging
 
-LLM_MODEL_LIST = [
-    'DeepSeek-R1-1.5B',
-    'DeepSeek-R1-7B',
-    'Qwen2.5-3B', 
-    'Qwen2.5-Coder-3B'
-]
+LLM_MODEL_DICT = {
+    'DeepSeek-R1-1.5B': 'https://pan.xunlei.com/s/VOVhbCCHgyEyu-dra2UjmHQ5A1?pwd=qkc7#',
+    'DeepSeek-R1-7B': 'https://pan.xunlei.com/s/VOVhbnljD22zWV5oqAn9bYEdA1?pwd=hy84#',
+    'Qwen2.5-3B': 'https://pan.xunlei.com/s/VOVhc2gr-9Ph8l8wQPRc4kcrA1?pwd=z9sn#', 
+    'Qwen2.5-Coder-3B': 'https://pan.xunlei.com/s/VOVhcCYnrCI1e6xO09VLD5-2A1?pwd=9265#'
+}
 LLM_QUANTIZATION_LIST = [
     'int8', 
     'int4'
@@ -14,11 +14,11 @@ LLM_DEVICE_LIST = [
     'CPU', 
     'GPU'
 ]
-T2I_MODEL_LIST = [
-    'dreamlike-anime',
-    'dreamlike-photoreal',
-    'dreamlike-diffusion'
-]
+T2I_MODEL_DICT = {
+    'dreamlike-anime': 'https://pan.xunlei.com/s/VOVh__wSi9g4VMDQ4xA575RkA1?pwd=3rif#',
+    'dreamlike-photoreal': 'https://pan.xunlei.com/s/VOVh_ozxL8qAx5s7vkZGk3i0A1?pwd=6qcw#',
+    'dreamlike-diffusion': 'https://pan.xunlei.com/s/VOVh_xz5uv86aEgbYNzS8Yr-A1?pwd=b5bf#'
+}
 T2I_QUANTIZATION_LIST = [
     'fp16',
     'int8'

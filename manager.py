@@ -257,7 +257,7 @@ class T2IManager:
             if seed is not None:
                 generator = ov_genai.TorchGenerator(seed)
                 if console_callback:
-                    console_callback(f"使用种子: {seed}\n")
+                    console_callback(f"使用指定种子: {seed}\n")
             else:
                 seed = random.randint(1, 100000)
                 generator = ov_genai.TorchGenerator(seed)
@@ -269,10 +269,10 @@ class T2IManager:
                     console_callback(f"负向提示词: {negative_prompt}\n")
                 console_callback(f"参数: {width}x{height}, {num_inference_steps}步\n")
             
-            # 创建进度回调包装器
+            # 创建进度回调包装器 - 修改为只发送进度信号，不添加换行
             def callback(step, num_steps, latent):
                 if progress_callback:
-                    progress_callback(step + 1, num_inference_steps)
+                    progress_callback(step, num_steps)
                 return False
             
             # 生成图像
@@ -309,13 +309,10 @@ class T2IManager:
             output_dir = os.path.join(os.path.dirname(__file__), 'pictures')
             os.makedirs(output_dir, exist_ok=True)
             
-            if console_callback:
-                console_callback(f"结果类型: {type(image_tensor)}\n")
-            
             if hasattr(image_tensor, 'data'):
                 images_data = image_tensor.data
                 if console_callback:
-                    console_callback(f"图像数据数量: {len(images_data)}\n")
+                    console_callback(f"\n图像数据数量: {len(images_data)}\n")
                 
                 for i, img_data in enumerate(images_data):
                     timestamp = time.strftime("%Y%m%d_%H%M%S")
