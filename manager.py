@@ -175,13 +175,6 @@ class T2IManager:
             "PERFORMANCE_HINT": "THROUGHPUT"
         }
 
-    def t2i_handle_exception(self, e, console_callback=None, prefix="T2I错误"):
-        """处理异常并记录日志"""
-        msg = f"{prefix}: {str(e)}\n\n"
-        logging.error(msg)
-        if console_callback:
-            console_callback(msg)
-
     def t2i_load_model(self, model_name, quant, console_callback=None):
         """加载指定的文生图模型"""
         model_dir = f"model/{model_name}/{quant}"
@@ -368,6 +361,13 @@ class T2IManager:
         except Exception as e:
             self.t2i_handle_exception(e, console_callback, prefix="T2I生成失败")
             raise
+
+    def t2i_handle_exception(self, e, console_callback=None, prefix="T2I错误"):
+        """处理异常并记录日志"""
+        msg = f"{prefix}: {str(e)}\n\n"
+        logging.error(msg)
+        if console_callback:
+            console_callback(msg)
 
     def __del__(self):
         """清理资源"""

@@ -1,6 +1,5 @@
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication  # 确保这行在开头
 import logging
-import os
 import sys
 
 # 导入自定义模块
@@ -17,16 +16,19 @@ if __name__ == "__main__":
     # 创建应用程序
     app = QApplication([])
     
-    # 创建主窗口并传入管理器
+    # 创建主窗口
     window = MainWindow()
     window.show()
     
-    # 设置应用程序退出选项，确保应用完全退出
+    # 设置应用程序退出选项
     app.setQuitOnLastWindowClosed(True)
     
     try:
-        # 使用退出代码
+        # 启动事件循环
         sys.exit(app.exec_())
+    except KeyboardInterrupt:
+        logging.info("用户中断程序")
+    except Exception as e:
+        logging.error(f"程序异常退出: {str(e)}")
     finally:
-        # 确保程序完全退出
-        os._exit(0)
+        logging.info("程序退出")
