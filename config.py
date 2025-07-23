@@ -11,7 +11,7 @@ LLM_QUANTIZATION_LIST = [
     'int4'
 ]
 LLM_DEVICE_LIST = [
-    'CPU', 
+    'CPU',
     'GPU'
 ]
 T2I_MODEL_DICT = {

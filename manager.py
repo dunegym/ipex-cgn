@@ -34,32 +34,12 @@ class LLMChatManager:
                 console_callback(f"正在准备LLM模型目录: {model_dir}...\n")
                 time.sleep(0.1)
                 
-            if device == 'NPU':
-                # 如果设备是NPU，创建缓存目录
-                if not os.path.exists('.npucache'):
-                    os.makedirs('.npucache')
-                if console_callback:
-                    console_callback(f"为NPU设备创建缓存目录...\n")
-                    time.sleep(0.1)
+            # 如果设备不是NPU，直接加载模型
+            if console_callback:
+                console_callback(f"正在加载LLM模型到{device}设备，这可能需要一些时间...\n")
+                time.sleep(0.1)
                 
-                # 加载前通知
-                if console_callback:
-                    console_callback(f"正在加载NPU LLM模型，这可能需要一些时间...\n")
-                    time.sleep(0.1)
-                    
-                self.llm_pipe = ov_genai.LLMPipeline(
-                    model_dir,
-                    device,
-                    CACHE_DIR=f".npucache/{model_name}/{quant}",  # 更新缓存路径结构
-                    MAX_PROMPT_LEN=4096
-                )
-            else:
-                # 如果设备不是NPU，直接加载模型
-                if console_callback:
-                    console_callback(f"正在加载LLM模型到{device}设备，这可能需要一些时间...\n")
-                    time.sleep(0.1)
-                    
-                self.llm_pipe = ov_genai.LLMPipeline(model_dir, device)
+            self.llm_pipe = ov_genai.LLMPipeline(model_dir, device)
 
             # 加载分词器
             if console_callback:
@@ -131,8 +111,7 @@ class LLMChatManager:
             self.llm_handle_exception(err)
             raise err
         try:
-            device = getattr(self.llm_pipe, 'device', None)
-            do_sample = False if device and str(device).upper() == 'NPU' else True  # 根据设备类型设置采样方式
+            do_sample = True  # 根据设备类型设置采样方式
             streamer = lambda x: window.chat_callback(x)  # 定义流式输出回调
             result = self.llm_pipe.generate(
                 [prompt],
