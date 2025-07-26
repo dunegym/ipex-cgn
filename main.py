@@ -8,23 +8,23 @@ from ui import MainWindow
 
 # 主程序入口
 if __name__ == "__main__":
-    # 设置日志记录
+    # 初始化日志系统并获取日志文件路径
     log_file_path = setup_logger()
     logging.info("程序启动")
     logging.info(f"日志保存路径: {log_file_path}")
     
-    # 创建应用程序
+    # 创建Qt应用程序实例
     app = QApplication([])
     
-    # 创建主窗口
+    # 创建主窗口实例并显示
     window = MainWindow()
     window.show()
     
-    # 设置应用程序退出选项
+    # 设置应用程序在最后一个窗口关闭时退出
     app.setQuitOnLastWindowClosed(True)
     
     try:
-        # 启动事件循环
+        # 启动Qt事件循环
         sys.exit(app.exec_())
     except KeyboardInterrupt:
         logging.info("用户中断程序")

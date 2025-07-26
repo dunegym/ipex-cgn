@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>
     <hetero>
+        <!-- 设备映射配置，定义不同模型组件在不同设备上的运行策略 -->
         <device_mapping>
             <!-- 文本编码器在 CPU 上运行（显存占用小，CPU 足够） -->
             <mapping pattern=".*text_encoder.*" device="CPU"/>
@@ -30,6 +31,7 @@
             <mapping pattern=".*" device="GPU" priority="low"/>
         </device_mapping>
         
+        <!-- 内存管理配置，优化内存使用 -->
         <memory_management>
             <!-- 启用内存优化 -->
             <enable_memory_efficient_attention>true</enable_memory_efficient_attention>
@@ -37,6 +39,7 @@
             <cpu_offload_threshold>0.8</cpu_offload_threshold>
         </memory_management>
         
+        <!-- 性能调优配置，提升推理速度 -->
         <performance_tuning>
             <!-- 批处理优化 -->
             <batch_size_optimization>true</batch_size_optimization>
@@ -47,6 +50,7 @@
             <pipeline_parallelism>true</pipeline_parallelism>
         </performance_tuning>
         
+        <!-- 设备回退策略，当主设备无法运行时自动切换到备用设备 -->
         <fallback_policy>
             <primary_device>GPU</primary_device>
             <fallback_device>CPU</fallback_device>

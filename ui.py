@@ -8,23 +8,30 @@ from config import LLM_MODEL_DICT, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, T2I_M
 from manager import LLMChatManager, T2IManager
 
 class ModelDownloadDialog(QDialog):
-    """模型下载信息对话框"""
+    """模型下载信息对话框，用于显示模型下载链接并提供打开链接的功能"""
     def __init__(self, model_dict, model_type, parent=None):
+        """
+        初始化模型下载对话框
+        :param model_dict: 模型字典，包含模型名称和下载链接
+        :param model_type: 模型类型（如"文生文"、"文生图"）
+        :param parent: 父窗口
+        """
         super().__init__(parent)
         self.model_dict = model_dict
         self.model_type = model_type
         self.ui_init_download_dialog()
     
     def ui_init_download_dialog(self):
-        """初始化下载对话框UI"""
+        """初始化下载对话框UI界面"""
+        # 设置窗口标题和尺寸
         self.setWindowTitle(f"{self.model_type}模型下载")
         self.setGeometry(200, 200, 800, 500)
-        self.setModal(True)  # 设置为模态对话框
+        self.setModal(True)  # 设置为模态对话框，阻止与其他窗口交互
         
-        # 主布局
+        # 创建主垂直布局
         layout = QVBoxLayout(self)
         
-        # 标题
+        # 创建标题标签
         title_label = QLabel(f"{self.model_type}模型下载信息")
         title_font = QFont()
         title_font.setPointSize(14)
@@ -33,68 +40,72 @@ class ModelDownloadDialog(QDialog):
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
-        # 说明文字
+        # 创建说明文字标签
         info_label = QLabel("请复制下载地址到浏览器或下载工具中下载模型文件")
         info_label.setAlignment(Qt.AlignCenter)
         info_label.setStyleSheet("color: gray; margin: 10px;")
         layout.addWidget(info_label)
         
-        # 创建表格
+        # 创建表格控件用于显示模型信息
         self.table = QTableWidget()
-        self.table.setColumnCount(3)  # 增加一列用于放置按钮
+        self.table.setColumnCount(3)  # 三列：模型名称、下载地址、操作按钮
         self.table.setHorizontalHeaderLabels(["模型名称", "下载地址", "操作"])
         self.table.setRowCount(len(self.model_dict))
         
         # 设置表格样式
-        self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)  # 交替行颜色
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)  # 整行选择
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
         
-        # 设置列宽
+        # 设置列宽自适应策略
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 按钮列自适应内容
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 模型名称列自适应内容
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # 下载地址列拉伸填充
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 操作按钮列自适应内容
 
         # 填充表格数据
         for row, (model_name, download_url) in enumerate(self.model_dict.items()):
-            # 模型名称
+            # 设置模型名称项
             name_item = QTableWidgetItem(model_name)
             name_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 0, name_item)
             
-            # 下载地址
+            # 设置下载地址项
             url_item = QTableWidgetItem(download_url)
-            url_item.setToolTip(download_url)
+            url_item.setToolTip(download_url)  # 鼠标悬停显示完整URL
             self.table.setItem(row, 1, url_item)
 
-            # 创建并添加“打开”按钮
+            # 创建并添加"打开"按钮，用于在浏览器中打开下载链接
             open_button = QPushButton("打开")
             open_button.clicked.connect(lambda _, url=download_url: self.open_url(url))
             self.table.setCellWidget(row, 2, open_button)
         
         layout.addWidget(self.table)
         
-        # 底部按钮
+        # 创建底部按钮布局
         button_layout = QHBoxLayout()
         
+        # 创建关闭按钮
         close_button = QPushButton("关闭")
         close_button.clicked.connect(self.close)
         close_button.setMinimumWidth(100)
         
-        # 添加弹性空间，让按钮居中
+        # 添加弹性空间使按钮居中
         button_layout.addStretch()
         button_layout.addWidget(close_button)
         button_layout.addStretch()
         
         layout.addLayout(button_layout)
         
-        # 设置表格行高
+        # 设置表格行高和隐藏行号
         self.table.verticalHeader().setDefaultSectionSize(40)
-        self.table.verticalHeader().setVisible(False)  # 隐藏行号
+        self.table.verticalHeader().setVisible(False)  # 隐藏行号显示
 
     def open_url(self, url_string):
-        """在默认浏览器中打开URL"""
+        """
+        在默认浏览器中打开指定URL
+        :param url_string: 要打开的URL字符串
+        """
         QDesktopServices.openUrl(QUrl(url_string))
 
 class WorkerSignals(QObject):

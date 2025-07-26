@@ -10,19 +10,31 @@ import tqdm
 import sys
 
 class LLMChatManager:
-    """管理LLM聊天的类"""
+    """管理LLM聊天功能的类，负责模型加载、卸载、聊天历史管理等"""
     def __init__(self):
+        """
+        初始化LLM聊天管理器
+        """
         # 初始化管道和分词器
         self.llm_pipe = None
         self.llm_tokenizer = None
         self.llm_chat_history = []  # 聊天历史记录
 
     def llm_clear_history(self):
-        """清空聊天历史记录"""
+        """
+        清空聊天历史记录
+        """
         self.llm_chat_history = []
 
     def llm_load_model(self, model_name, quant, device, console_callback=None):
-        """加载指定的模型"""
+        """
+        加载指定的LLM模型
+        :param model_name: 模型名称
+        :param quant: 量化精度（int4或int8）
+        :param device: 设备类型（CPU、GPU等）
+        :param console_callback: 控制台输出回调函数
+        :return: 加载成功返回True，否则返回False
+        """
         model_dir = f"model/{model_name}/{quant}"  # 更新路径结构
         logging.info(f"开始加载LLM模型: {model_name}, 量化精度: {quant}, 设备: {device}")
         if console_callback:
@@ -67,7 +79,11 @@ class LLMChatManager:
             return False
 
     def llm_unload_model(self, console_callback=None):
-        """卸载模型"""
+        """
+        卸载LLM模型
+        :param console_callback: 控制台输出回调函数
+        :return: 卸载成功返回True，否则返回False
+        """
         logging.info("开始卸载LLM模型")
         try:
             self.llm_pipe = None
@@ -81,7 +97,12 @@ class LLMChatManager:
             return False
 
     def llm_build_prompt(self, user_input, model_name):
-        """构建聊天提示"""
+        """
+        构建聊天提示词
+        :param user_input: 用户输入
+        :param model_name: 模型名称
+        :return: 构建好的提示词
+        """
         model_dir = None
         for quant in LLM_QUANTIZATION_LIST:
             candidate = f"model/{model_name}/{quant}"  # 更新路径结构
@@ -107,7 +128,13 @@ class LLMChatManager:
             return f"<|user|>\n{user_input}\n<|assistant|>\n"
 
     def llm_generate_reply(self, prompt, window, max_new_tokens=2048):
-        """生成回复"""
+        """
+        生成回复
+        :param prompt: 提示词
+        :param window: 主窗口对象，用于回调
+        :param max_new_tokens: 最大生成token数
+        :return: 生成结果
+        """
         if not self.llm_pipe:
             err = RuntimeError("LLM模型未加载")
             self.llm_handle_exception(err)
@@ -131,23 +158,35 @@ class LLMChatManager:
             raise
 
     def llm_append_history(self, user_input, assistant_output):
-        """将用户输入和助手输出添加到聊天历史记录中"""
+        """
+        将用户输入和助手输出添加到聊天历史记录中
+        :param user_input: 用户输入
+        :param assistant_output: 助手输出
+        """
         self.llm_chat_history.append({"role": "user", "content": user_input})
         self.llm_chat_history.append({"role": "assistant", "content": str(assistant_output)})
         if len(self.llm_chat_history) > 6:
             self.llm_chat_history = self.llm_chat_history[-6:]  # 保持历史记录长度不超过6
 
     def llm_handle_exception(self, e, console_callback=None, prefix="LLM错误"):
-        """处理异常并记录日志"""
+        """
+        处理异常并记录日志
+        :param e: 异常对象
+        :param console_callback: 控制台输出回调函数
+        :param prefix: 错误信息前缀
+        """
         msg = f"{prefix}: {str(e)}\n\n"
         logging.error(msg)
         if console_callback:
             console_callback(msg)
 
 class T2IManager:
-    """管理文生图功能的类"""
+    """管理文生图功能的类，负责模型加载、卸载、图像生成等"""
     def __init__(self):
-        """初始化管道"""
+        """
+        初始化文生图管理器
+        """
+        # 初始化管道
         self.t2i_pipe = None
         self.t2i_model_name = None
         self.t2i_quant = None
@@ -157,7 +196,13 @@ class T2IManager:
         }
 
     def t2i_load_model(self, model_name, quant, console_callback=None):
-        """加载指定的文生图模型"""
+        """
+        加载指定的文生图模型
+        :param model_name: 模型名称
+        :param quant: 量化精度（fp16或int8）
+        :param console_callback: 控制台输出回调函数
+        :return: 加载成功返回True，否则返回False
+        """
         model_dir = f"model/{model_name}/{quant}"
         logging.info(f"开始加载T2I模型: {model_name}, 量化精度: {quant}")
         
@@ -202,7 +247,11 @@ class T2IManager:
             return False
 
     def t2i_unload_model(self, console_callback=None):
-        """卸载文生图模型"""
+        """
+        卸载文生图模型
+        :param console_callback: 控制台输出回调函数
+        :return: 卸载成功返回True，否则返回False
+        """
         logging.info("开始卸载T2I模型")
         try:
             self.t2i_pipe = None
@@ -219,7 +268,20 @@ class T2IManager:
     def t2i_generate_image(self, prompt, negative_prompt="", width=512, height=512,
                            num_inference_steps=20, num_images=1, seed=None,
                            console_callback=None, progress_callback=None, image_generated_callback=None):
-        """生成图像"""
+        """
+        生成图像
+        :param prompt: 正向提示词
+        :param negative_prompt: 负向提示词
+        :param width: 图像宽度
+        :param height: 图像高度
+        :param num_inference_steps: 推理步数
+        :param num_images: 生成图像数量
+        :param seed: 随机种子
+        :param console_callback: 控制台输出回调函数
+        :param progress_callback: 进度回调函数
+        :param image_generated_callback: 图像生成回调函数
+        :return: 生成的图像路径列表
+        """
         if self.t2i_pipe is None:
             err = RuntimeError("T2I模型未加载")
             self.t2i_handle_exception(err, console_callback)
@@ -358,7 +420,12 @@ class T2IManager:
         return image_paths
 
     def t2i_handle_exception(self, e, console_callback=None, prefix="T2I错误"):
-        """处理异常并记录日志"""
+        """
+        处理异常并记录日志
+        :param e: 异常对象
+        :param console_callback: 控制台输出回调函数
+        :param prefix: 错误信息前缀
+        """
         msg = f"{prefix}: {str(e)}\n\n"
         logging.error(msg)
         if console_callback:
