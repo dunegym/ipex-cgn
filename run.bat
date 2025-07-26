@@ -1,13 +1,24 @@
 @echo off
-REM 启动脚本，用于快速运行项目
-REM 该脚本会最小化启动一个命令行窗口，激活conda环境并运行主程序
-
-REM 关闭命令回显
-start "" /min cmd /c "
-    REM 激活conda环境
-    call conda activate openvino-cgn
-    REM 切换到脚本所在目录
-    cd /d %~dp0
-    REM 运行主程序
-    python main.py
-"
+chcp 65001 >nul
+echo ==========================================
+echo 启动 ipex-cgn 项目
+echo ==========================================
+echo.
+echo [步骤1] 激活conda环境: openvino-cgn
+call conda activate openvino-cgn
+if %errorlevel% neq 0 (
+    echo 错误: 环境激活失败
+    pause
+    exit /b 1
+)
+echo 环境激活成功
+echo.
+echo [步骤2] 切换到项目目录: %~dp0
+cd /d %~dp0
+echo 当前目录: %cd%
+echo.
+echo [步骤3] 启动主程序
+python main.py
+echo.
+echo 程序已退出，按任意键关闭窗口...
+pause
