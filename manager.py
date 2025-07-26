@@ -216,200 +216,146 @@ class T2IManager:
             self.t2i_handle_exception(e, console_callback, prefix="T2I模型卸载失败")
             return False
 
-    def t2i_generate_image(self, prompt, negative_prompt="", width=512, height=512, 
-                          num_inference_steps=20, num_images=1, seed=None, 
-                          console_callback=None, progress_callback=None):
+    def t2i_generate_image(self, prompt, negative_prompt="", width=512, height=512,
+                           num_inference_steps=20, num_images=1, seed=None,
+                           console_callback=None, progress_callback=None, image_generated_callback=None):
         """生成图像"""
         if self.t2i_pipe is None:
             err = RuntimeError("T2I模型未加载")
-            self.t2i_handle_exception(err)
+            self.t2i_handle_exception(err, console_callback)
             raise err
-            
-        try:
-            # 设置随机种子 - 使用OpenVINO的随机生成器
-            generator = None
-            if seed is not None:
-                generator = ov_genai.TorchGenerator(seed)
-                if console_callback:
-                    console_callback(f"使用指定种子: {seed}\n")
-            else:
-                seed = random.randint(1, 100000)
-                generator = ov_genai.TorchGenerator(seed)
-            
+
+        image_paths = []
+        output_dir = os.path.join(os.path.dirname(__file__), 'pictures')
+        os.makedirs(output_dir, exist_ok=True)
+
+        initial_seed = seed
+
+        # 定义tqdm的辅助类
+        class TqdmToConsole(tqdm.tqdm):
+            """重定向tqdm进度条，同时输出到终端和捕获输出供UI使用"""
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.last_output = ""
+
+            def display(self, msg=None, pos=None):
+                super().display(msg, pos)
+                self.last_output = self._get_last_display_str()
+
+            def _get_last_display_str(self):
+                d = self.format_dict
+                return self.format_meter(**d)
+
+        for i in range(num_images):
             if console_callback:
-                console_callback(f"开始T2I生成图像...\n")
+                console_callback(f"\n--- 开始生成第 {i + 1}/{num_images} 张图像 ---\n")
+
+            current_seed = initial_seed + i if initial_seed is not None else random.randint(1, 100000)
+            generator = ov_genai.TorchGenerator(current_seed)
+
+            if console_callback:
+                console_callback(f"使用种子: {current_seed}\n")
                 console_callback(f"提示词: {prompt}\n")
                 if negative_prompt:
                     console_callback(f"负向提示词: {negative_prompt}\n")
                 console_callback(f"参数: {width}x{height}, {num_inference_steps}步\n")
-            
-            # 生成图像
-            start_time = time.time()
-            logging.info(f"开始T2I图像生成, 提示词: {prompt[:50]}...")
-            
+
+            pbar = None
             try:
-                # 创建进度条 - 输出到终端并捕获进度显示
-                class TqdmToConsole(tqdm.tqdm):
-                    """重定向tqdm进度条，同时输出到终端和捕获输出供UI使用"""
-                    def __init__(self, *args, **kwargs):
-                        super().__init__(*args, **kwargs)
-                        self.last_output = ""
+                start_time = time.time()
+                logging.info(f"开始T2I图像生成 (图片 {i + 1}/{num_images}), 提示词: {prompt[:50]}...")
 
-                    def display(self, msg=None, pos=None):
-                        # 调用父类的display方法确保终端显示
-                        super().display(msg, pos)
-                        # 保存最后的输出字符串
-                        self.last_output = self._get_last_display_str()
-                        
-                    def _get_last_display_str(self):
-                        # 获取最后显示的进度条字符串
-                        d = self.format_dict
-                        return self.format_meter(**d)
-                
-                # 创建自定义进度条
-                pbar = TqdmToConsole(total=num_inference_steps, desc=f"生成图像")
-                
-                # 定义回调函数（重要：每次都要重新定义，避免作用域问题）
-                def callback(step, num_steps, latent):
-                    pbar.update(1)
-                    sys.stdout.flush()  # 确保进度条正确显示
-                    if progress_callback:
-                        progress_callback(step, num_steps, pbar.last_output)
-                    return False
-                
-                image_tensor = self.t2i_pipe.generate(
-                    prompt,
-                    negative_prompt=negative_prompt if negative_prompt else "",
-                    width=width,
-                    height=height,
-                    num_inference_steps=num_inference_steps,
-                    num_images_per_prompt=num_images,
-                    generator=generator,
-                    callback=callback
-                )
-                
-                # 关闭进度条
-                pbar.close()
-                
-            except Exception as e1:
-                # 确保进度条在异常时关闭
-                if 'pbar' in locals():
-                    pbar.close()
-                
-                if console_callback:
-                    console_callback(f"尝试完整参数失败: {str(e1)}\n")
-                logging.warning(f"T2I完整参数生成失败，使用简化参数: {str(e1)}")
-                
-                # 重新创建进度条 - 简化参数版本
-                class TqdmToConsole(tqdm.tqdm):
-                    """重定向tqdm进度条，同时输出到终端和捕获输出供UI使用"""
-                    def __init__(self, *args, **kwargs):
-                        super().__init__(*args, **kwargs)
-                        self.last_output = ""
+                # 创建进度条
+                pbar = TqdmToConsole(total=num_inference_steps, desc=f"生成图像 {i + 1}/{num_images}")
 
-                    def display(self, msg=None, pos=None):
-                        # 调用父类的display方法确保终端显示
-                        super().display(msg, pos)
-                        # 保存最后的输出字符串
-                        self.last_output = self._get_last_display_str()
-                        
-                    def _get_last_display_str(self):
-                        # 获取最后显示的进度条字符串
-                        d = self.format_dict
-                        return self.format_meter(**d)
-                
-                # 重新创建自定义进度条
-                pbar = TqdmToConsole(total=num_inference_steps, desc=f"生成图像(简化参数)")
-                
-                # 重新定义回调函数（重要：避免引用旧的进度条）
                 def callback(step, num_steps, latent):
                     pbar.update(1)
                     sys.stdout.flush()
                     if progress_callback:
                         progress_callback(step, num_steps, pbar.last_output)
                     return False
-                
-                image_tensor = self.t2i_pipe.generate(
-                    prompt,
-                    negative_prompt=negative_prompt if negative_prompt else "",
-                    num_inference_steps=num_inference_steps,
-                    generator=generator,
-                    callback=callback
-                )
-                
-                # 关闭进度条
-                pbar.close()
-            
-            generation_time = time.time() - start_time
-            
-            # 处理OpenVINO Tensor结果
-            image_paths = []
-            output_dir = os.path.join(os.path.dirname(__file__), 'pictures')
-            os.makedirs(output_dir, exist_ok=True)
-            
-            if hasattr(image_tensor, 'data'):
-                images_data = image_tensor.data
-                if console_callback:
-                    console_callback(f"\n图像数据数量: {len(images_data)}\n")
-                
-                for i, img_data in enumerate(images_data):
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    filename = f"t2i_{timestamp}_{i+1}.png"
-                    filepath = os.path.join(output_dir, filename)
+
+                try:
+                    image_tensor = self.t2i_pipe.generate(
+                        prompt,
+                        negative_prompt=negative_prompt if negative_prompt else "",
+                        width=width,
+                        height=height,
+                        num_inference_steps=num_inference_steps,
+                        num_images_per_prompt=1,
+                        generator=generator,
+                        callback=callback
+                    )
+                except Exception as e1:
+                    if console_callback:
+                        console_callback(f"尝试完整参数失败: {str(e1)}\n")
+                    logging.warning(f"T2I完整参数生成失败，使用简化参数: {str(e1)}")
                     
+                    # 简化参数重试
+                    image_tensor = self.t2i_pipe.generate(
+                        prompt,
+                        negative_prompt=negative_prompt if negative_prompt else "",
+                        num_inference_steps=num_inference_steps,
+                        generator=generator,
+                        callback=callback
+                    )
+
+                generation_time = time.time() - start_time
+                pbar.close()
+
+                # 保存图像
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                filename = f"t2i_{timestamp}_{i + 1}.png"
+                filepath = os.path.join(output_dir, filename)
+
+                try:
+                    import numpy as np
+                    if hasattr(image_tensor, 'data') and len(image_tensor.data) > 0:
+                        img_data = image_tensor.data[0]
+                    elif hasattr(image_tensor, 'numpy'):
+                        img_data = image_tensor.numpy()
+                    else:
+                        img_data = np.array(image_tensor)
+
+                    if img_data.ndim == 4 and img_data.shape[0] == 1:
+                        img_data = np.squeeze(img_data, axis=0)
+                    
+                    if img_data.max() <= 1.0:
+                        img_data = (img_data * 255).astype(np.uint8)
+
                     image = Image.fromarray(img_data)
                     image.save(filepath)
                     image_paths.append(filepath)
-                    
+
+                    # 实时回调，传递单张图片路径
+                    if image_generated_callback:
+                        image_generated_callback(filepath)
+
                     if console_callback:
-                        console_callback(f"图像已保存: {filepath}\n")
+                        console_callback(f"\n图像已保存: {filepath}\n")
                     logging.info(f"T2I图像已保存: {filepath}")
-            else:
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                filename = f"t2i_{timestamp}_1.png"
-                filepath = os.path.join(output_dir, filename)
-                
-                try:
-                    if hasattr(image_tensor, 'numpy'):
-                        img_array = image_tensor.numpy()
-                    else:
-                        import numpy as np
-                        img_array = np.array(image_tensor)
-                    
-                    if img_array.max() <= 1.0:
-                        img_array = (img_array * 255).astype(np.uint8)
-                    
-                    image = Image.fromarray(img_array)
-                    image.save(filepath)
-                    image_paths.append(filepath)
-                    
-                    if console_callback:
-                        console_callback(f"图像已保存: {filepath}\n")
-                    logging.info(f"T2I图像已保存: {filepath}")
-                        
+
                 except Exception as convert_error:
-                    if console_callback:
-                        console_callback(f"图像转换失败: {str(convert_error)}\n")
-                    logging.error(f"T2I图像转换失败: {str(convert_error)}")
-                    raise convert_error
-        
-            if console_callback:
-                console_callback(f"T2I生成完成！耗时: {generation_time:.2f}秒\n")
-                console_callback(f"平均每步: {generation_time/num_inference_steps:.2f}秒\n\n")
-            
-            # 计算速度指标（类似LLM的throughput）
-            steps_per_second = num_inference_steps / generation_time if generation_time > 0 else 0
-            logging.info(f"T2I生成图像完成, 速度: {steps_per_second:.2f} steps/s")
-            
-            return image_paths
-            
-        except Exception as e:
-            # 确保进度条被关闭
-            if 'pbar' in locals():
-                pbar.close()
-            
-            self.t2i_handle_exception(e, console_callback, prefix="T2I生成失败")
-            raise
+                    self.t2i_handle_exception(convert_error, console_callback, prefix="图像转换和保存失败")
+                    continue
+
+                if console_callback:
+                    console_callback(f"第 {i + 1}/{num_images} 张图像生成完成！耗时: {generation_time:.2f}秒\n")
+                    console_callback(f"平均每步: {generation_time / num_inference_steps:.2f}秒\n")
+
+                steps_per_second = num_inference_steps / generation_time if generation_time > 0 else 0
+                logging.info(f"T2I生成图像完成 (图片 {i + 1}/{num_images}), 速度: {steps_per_second:.2f} steps/s")
+
+            except Exception as e:
+                if pbar:
+                    pbar.close()
+                self.t2i_handle_exception(e, console_callback, prefix=f"T2I生成失败 (图片 {i + 1}/{num_images})")
+                continue
+
+        if console_callback and num_images > 0:
+            console_callback(f"\n--- 所有 {len(image_paths)}/{num_images} 张图像生成完毕 ---\n\n")
+
+        return image_paths
 
     def t2i_handle_exception(self, e, console_callback=None, prefix="T2I错误"):
         """处理异常并记录日志"""

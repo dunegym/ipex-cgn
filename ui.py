@@ -120,7 +120,8 @@ class MainWindow(QMainWindow):
     # T2I相关信号保持不变
     t2i_console_signal = pyqtSignal(str)
     t2i_update_ui_signal = pyqtSignal(bool)
-    t2i_image_signal = pyqtSignal(list)  # 用于显示生成的图像
+    t2i_image_signal = pyqtSignal(list)
+    t2i_single_image_signal = pyqtSignal(str)  # 新增：用于单张图片实时显示
     # 添加进度信号到类级别，包含tqdm进度条文本
     t2i_progress_signal = pyqtSignal(int, int, str)  # current_step, total_steps, progress_bar_text
     
@@ -160,6 +161,7 @@ class MainWindow(QMainWindow):
         self.t2i_console_signal.connect(self.ui_update_t2i_console)
         self.t2i_update_ui_signal.connect(self.ui_update_t2i_state)
         self.t2i_image_signal.connect(self.ui_update_t2i_images)
+        self.t2i_single_image_signal.connect(self.ui_append_t2i_image)  # 连接新信号
         
         # 连接进度信号
         self.t2i_progress_signal.connect(self.ui_update_t2i_progress)
@@ -400,6 +402,15 @@ class MainWindow(QMainWindow):
         self.t2i_height_input.setReadOnly(True)  # 禁止手动输入数字
         self.t2i_height_input.setButtonSymbols(QSpinBox.UpDownArrows)  # 只显示上下箭头
         params_layout.addWidget(self.t2i_height_input)
+
+        # 生图数量 - 限制范围为1-100
+        num_images_label = QLabel("生图数量:")
+        params_layout.addWidget(num_images_label)
+        self.t2i_num_images_input = QSpinBox()
+        self.t2i_num_images_input.setRange(1, 100)
+        self.t2i_num_images_input.setValue(1)
+        self.t2i_num_images_input.setSingleStep(1)
+        params_layout.addWidget(self.t2i_num_images_input)
 
         # 按钮部分
         button_layout = QHBoxLayout()
@@ -775,6 +786,9 @@ class MainWindow(QMainWindow):
             self.t2i_console_signal.emit("图像正在生成中，请等待...\n")
             return
             
+        # 清空预览区
+        self.ui_clear_t2i_preview()
+
         # 重置进度条状态 - 关键修复点1
         self.t2i_progress_line_start = -1
         self.t2i_is_generating = True
@@ -791,6 +805,7 @@ class MainWindow(QMainWindow):
         seed = self.t2i_seed_input.value() if self.t2i_seed_input.value() >= 0 else None
         width = self.t2i_width_input.value()
         height = self.t2i_height_input.value()
+        num_images = self.t2i_num_images_input.value()
         
         if not prompt:
             self.t2i_console_signal.emit("请输入提示词\n")
@@ -804,6 +819,9 @@ class MainWindow(QMainWindow):
             try:
                 def progress_callback(step, total_steps, progress_bar_text):
                     self.t2i_progress_signal.emit(step, total_steps, progress_bar_text)
+
+                def image_generated_callback(image_path):
+                    self.t2i_single_image_signal.emit(image_path)
                 
                 result = self.t2i_manager.t2i_generate_image(
                     prompt=prompt,
@@ -811,10 +829,11 @@ class MainWindow(QMainWindow):
                     width=width,
                     height=height,
                     num_inference_steps=steps,
-                    num_images=1,
+                    num_images=num_images,
                     seed=seed,
                     console_callback=lambda msg: self.t2i_console_signal.emit(msg),
-                    progress_callback=progress_callback
+                    progress_callback=progress_callback,
+                    image_generated_callback=image_generated_callback
                 )
                 return result
             except Exception as e:
@@ -831,8 +850,8 @@ class MainWindow(QMainWindow):
 
     def t2i_on_generate_success(self, result):
         """图像生成成功回调"""
-        self.t2i_console_signal.emit("图像生成完成！\n")
-        self.t2i_image_signal.emit(result)
+        self.t2i_console_signal.emit("所有图像生成完成！\n")
+        # self.t2i_image_signal.emit(result) # 不再需要一次性更新
 
     def t2i_on_generate_error(self, error_msg):
         """图像生成错误回调"""
@@ -869,6 +888,10 @@ class MainWindow(QMainWindow):
 
     def ui_update_t2i_console(self, msg):
         """优化的控制台更新，避免频繁刷新"""
+        # 检查是否是新图像生成的开始信号
+        if "--- 开始生成第" in msg:
+            self.t2i_progress_line_start = -1  # 重置进度条状态
+
         # 对于进度条相关的消息，完全跳过频率限制
         is_progress_msg = "进度:" in msg or "生成图像" in msg or "%" in msg or "====" in msg
         
@@ -906,37 +929,34 @@ class MainWindow(QMainWindow):
         self.t2i_load_unload_button.setEnabled(True)  # 操作完成后启用按钮
         self.t2i_generate_button.setEnabled(model_loaded)
 
-    def ui_update_t2i_images(self, image_paths):
-        """更新文生图预览区域显示"""
-        # 清空现有预览
+    def ui_clear_t2i_preview(self):
+        """清空预览区域"""
         for i in reversed(range(self.t2i_preview_layout.count())):
             child = self.t2i_preview_layout.itemAt(i).widget()
             if child:
                 child.setParent(None)
-        
-        # 显示新生成的图像
+
+    def ui_append_t2i_image(self, image_path):
+        """向预览区追加单张图片"""
+        try:
+            image_label = QLabel()
+            pixmap = QPixmap(image_path)
+            scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            image_label.setPixmap(scaled_pixmap)
+            image_label.setAlignment(Qt.AlignCenter)
+            image_label.setToolTip(f"图像路径: {image_path}")
+            self.t2i_preview_layout.addWidget(image_label)
+        except Exception as e:
+            logging.error(f"显示图像时出错: {str(e)}")
+            error_label = QLabel(f"图像显示失败: {os.path.basename(image_path)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            self.t2i_preview_layout.addWidget(error_label)
+
+    def ui_update_t2i_images(self, image_paths):
+        """更新文生图预览区域显示（保留用于可能的批量更新场景）"""
+        self.ui_clear_t2i_preview()
         for image_path in image_paths:
-            try:
-                # 创建图像标签
-                image_label = QLabel()
-                pixmap = QPixmap(image_path)
-                
-                # 调整图像大小以适应预览区
-                scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                image_label.setPixmap(scaled_pixmap)
-                image_label.setAlignment(Qt.AlignCenter)
-                
-                # 添加图像路径作为提示
-                image_label.setToolTip(f"图像路径: {image_path}")
-                
-                # 添加到布局
-                self.t2i_preview_layout.addWidget(image_label)
-                
-            except Exception as e:
-                logging.error(f"显示图像时出错: {str(e)}")
-                error_label = QLabel(f"图像显示失败: {os.path.basename(image_path)}")
-                error_label.setAlignment(Qt.AlignCenter)
-                self.t2i_preview_layout.addWidget(error_label)
+            self.ui_append_t2i_image(image_path)
 
     def ui_update_t2i_progress(self, current_step, total_steps, progress_bar_text):
         """优化的进度更新，确保实时性和100%完成显示"""
