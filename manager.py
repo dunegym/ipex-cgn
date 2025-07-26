@@ -6,6 +6,8 @@ import openvino_genai as ov_genai
 import random
 from config import LLM_QUANTIZATION_LIST
 from PIL import Image
+import tqdm
+import sys
 
 class LLMChatManager:
     """管理LLM聊天的类"""
@@ -241,17 +243,40 @@ class T2IManager:
                     console_callback(f"负向提示词: {negative_prompt}\n")
                 console_callback(f"参数: {width}x{height}, {num_inference_steps}步\n")
             
-            # 创建进度回调包装器 - 修改为只发送进度信号，不添加换行
-            def callback(step, num_steps, latent):
-                if progress_callback:
-                    progress_callback(step, num_steps)
-                return False
-            
             # 生成图像
             start_time = time.time()
             logging.info(f"开始T2I图像生成, 提示词: {prompt[:50]}...")
             
             try:
+                # 创建进度条 - 输出到终端并捕获进度显示
+                class TqdmToConsole(tqdm.tqdm):
+                    """重定向tqdm进度条，同时输出到终端和捕获输出供UI使用"""
+                    def __init__(self, *args, **kwargs):
+                        super().__init__(*args, **kwargs)
+                        self.last_output = ""
+
+                    def display(self, msg=None, pos=None):
+                        # 调用父类的display方法确保终端显示
+                        super().display(msg, pos)
+                        # 保存最后的输出字符串
+                        self.last_output = self._get_last_display_str()
+                        
+                    def _get_last_display_str(self):
+                        # 获取最后显示的进度条字符串
+                        d = self.format_dict
+                        return self.format_meter(**d)
+                
+                # 创建自定义进度条
+                pbar = TqdmToConsole(total=num_inference_steps, desc=f"生成图像")
+                
+                # 定义回调函数（重要：每次都要重新定义，避免作用域问题）
+                def callback(step, num_steps, latent):
+                    pbar.update(1)
+                    sys.stdout.flush()  # 确保进度条正确显示
+                    if progress_callback:
+                        progress_callback(step, num_steps, pbar.last_output)
+                    return False
+                
                 image_tensor = self.t2i_pipe.generate(
                     prompt,
                     negative_prompt=negative_prompt if negative_prompt else "",
@@ -262,10 +287,48 @@ class T2IManager:
                     generator=generator,
                     callback=callback
                 )
+                
+                # 关闭进度条
+                pbar.close()
+                
             except Exception as e1:
+                # 确保进度条在异常时关闭
+                if 'pbar' in locals():
+                    pbar.close()
+                
                 if console_callback:
                     console_callback(f"尝试完整参数失败: {str(e1)}\n")
                 logging.warning(f"T2I完整参数生成失败，使用简化参数: {str(e1)}")
+                
+                # 重新创建进度条 - 简化参数版本
+                class TqdmToConsole(tqdm.tqdm):
+                    """重定向tqdm进度条，同时输出到终端和捕获输出供UI使用"""
+                    def __init__(self, *args, **kwargs):
+                        super().__init__(*args, **kwargs)
+                        self.last_output = ""
+
+                    def display(self, msg=None, pos=None):
+                        # 调用父类的display方法确保终端显示
+                        super().display(msg, pos)
+                        # 保存最后的输出字符串
+                        self.last_output = self._get_last_display_str()
+                        
+                    def _get_last_display_str(self):
+                        # 获取最后显示的进度条字符串
+                        d = self.format_dict
+                        return self.format_meter(**d)
+                
+                # 重新创建自定义进度条
+                pbar = TqdmToConsole(total=num_inference_steps, desc=f"生成图像(简化参数)")
+                
+                # 重新定义回调函数（重要：避免引用旧的进度条）
+                def callback(step, num_steps, latent):
+                    pbar.update(1)
+                    sys.stdout.flush()
+                    if progress_callback:
+                        progress_callback(step, num_steps, pbar.last_output)
+                    return False
+                
                 image_tensor = self.t2i_pipe.generate(
                     prompt,
                     negative_prompt=negative_prompt if negative_prompt else "",
@@ -273,6 +336,9 @@ class T2IManager:
                     generator=generator,
                     callback=callback
                 )
+                
+                # 关闭进度条
+                pbar.close()
             
             generation_time = time.time() - start_time
             
@@ -338,6 +404,10 @@ class T2IManager:
             return image_paths
             
         except Exception as e:
+            # 确保进度条被关闭
+            if 'pbar' in locals():
+                pbar.close()
+            
             self.t2i_handle_exception(e, console_callback, prefix="T2I生成失败")
             raise
 

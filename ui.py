@@ -121,8 +121,8 @@ class MainWindow(QMainWindow):
     t2i_console_signal = pyqtSignal(str)
     t2i_update_ui_signal = pyqtSignal(bool)
     t2i_image_signal = pyqtSignal(list)  # 用于显示生成的图像
-    # 添加进度信号到类级别
-    t2i_progress_signal = pyqtSignal(int, int)  # current_step, total_steps
+    # 添加进度信号到类级别，包含tqdm进度条文本
+    t2i_progress_signal = pyqtSignal(int, int, str)  # current_step, total_steps, progress_bar_text
     
     def __init__(self):
         super().__init__()
@@ -145,10 +145,11 @@ class MainWindow(QMainWindow):
         self.t2i_current_step = 0
         self.t2i_total_steps = 0
         self.t2i_progress_line_start = -1  # 记录进度行开始位置
+        self.t2i_is_generating = False  # 添加生成状态标志
         
         # 添加UI刷新控制
         self._last_ui_update = 0
-        self._ui_update_interval = 100  # 最小100ms间隔
+        self._ui_update_interval = 50  # 减少到50ms间隔，提高响应速度
         
         self.ui_init()  
         # 连接信号到槽
@@ -378,22 +379,26 @@ class MainWindow(QMainWindow):
         self.t2i_seed_input.setSpecialValueText("随机")
         params_layout.addWidget(self.t2i_seed_input)
 
-        # 图片宽度 - 限制范围为256-512，步长为8
+        # 图片宽度 - 限制范围为256-512，步长为8，禁止手动输入
         width_label = QLabel("宽度:")
         params_layout.addWidget(width_label)
         self.t2i_width_input = QSpinBox()
         self.t2i_width_input.setRange(256, 512)  # 修改范围
         self.t2i_width_input.setValue(512)
         self.t2i_width_input.setSingleStep(8)  # 确保步长为8
+        self.t2i_width_input.setReadOnly(True)  # 禁止手动输入数字
+        self.t2i_width_input.setButtonSymbols(QSpinBox.UpDownArrows)  # 只显示上下箭头
         params_layout.addWidget(self.t2i_width_input)
 
-        # 图片高度 - 限制范围为256-512，步长为8
+        # 图片高度 - 限制范围为256-512，步长为8，禁止手动输入
         height_label = QLabel("高度:")
         params_layout.addWidget(height_label)
         self.t2i_height_input = QSpinBox()
         self.t2i_height_input.setRange(256, 512)  # 修改范围
         self.t2i_height_input.setValue(512)
         self.t2i_height_input.setSingleStep(8)  # 确保步长为8
+        self.t2i_height_input.setReadOnly(True)  # 禁止手动输入数字
+        self.t2i_height_input.setButtonSymbols(QSpinBox.UpDownArrows)  # 只显示上下箭头
         params_layout.addWidget(self.t2i_height_input)
 
         # 按钮部分
@@ -437,7 +442,7 @@ class MainWindow(QMainWindow):
         self.t2i_preview_area.setWidget(self.t2i_preview_container)
         
         preview_layout.addWidget(self.t2i_preview_area)
-        bottom_layout.addWidget(preview_widget, 1)
+        bottom_layout.addWidget(preview_widget, 2)  # 预览区比例调整为2
 
         # 右侧控制台
         console_widget = QWidget()
@@ -450,7 +455,7 @@ class MainWindow(QMainWindow):
         self.t2i_console_display.setStyleSheet("background-color: lightgray;")
         self.t2i_console_display.setMinimumHeight(300)
         console_layout.addWidget(self.t2i_console_display)
-        bottom_layout.addWidget(console_widget, 1)
+        bottom_layout.addWidget(console_widget, 3)  # 控制台比例调整为3，使其更宽
 
         return page_widget
 
@@ -770,6 +775,12 @@ class MainWindow(QMainWindow):
             self.t2i_console_signal.emit("图像正在生成中，请等待...\n")
             return
             
+        # 重置进度条状态 - 关键修复点1
+        self.t2i_progress_line_start = -1
+        self.t2i_is_generating = True
+        self.t2i_current_step = 0
+        self.t2i_total_steps = 0
+            
         self.t2i_generate_button.setEnabled(False)
         self.t2i_generate_button.setText("正在生成...")
         
@@ -785,13 +796,14 @@ class MainWindow(QMainWindow):
             self.t2i_console_signal.emit("请输入提示词\n")
             self.t2i_generate_button.setEnabled(True)
             self.t2i_generate_button.setText("生成图像")
+            self.t2i_is_generating = False
             return
         
         # 创建可取消的工作线程
         def generate_task():
             try:
-                def progress_callback(step, total_steps):
-                    self.t2i_progress_signal.emit(step, total_steps)
+                def progress_callback(step, total_steps, progress_bar_text):
+                    self.t2i_progress_signal.emit(step, total_steps, progress_bar_text)
                 
                 result = self.t2i_manager.t2i_generate_image(
                     prompt=prompt,
@@ -831,6 +843,9 @@ class MainWindow(QMainWindow):
         self.active_workers.pop('t2i_generate', None)
         self.t2i_generate_button.setEnabled(True)
         self.t2i_generate_button.setText("生成图像")
+        # 重置生成状态 - 关键修复点2
+        self.t2i_is_generating = False
+        self.t2i_progress_line_start = -1
 
     def t2i_refresh_model_list(self):
         """刷新文生图模型列表"""
@@ -853,28 +868,37 @@ class MainWindow(QMainWindow):
             logging.warning("[T2I] 刷新后未找到任何可用模型")
 
     def ui_update_t2i_console(self, msg):
-        """控制UI更新频率"""
-        import time
-        current_time = time.time() * 1000  # 转换为毫秒
+        """优化的控制台更新，避免频繁刷新"""
+        # 对于进度条相关的消息，完全跳过频率限制
+        is_progress_msg = "进度:" in msg or "生成图像" in msg or "%" in msg or "====" in msg
         
-        # 限制更新频率
-        if current_time - self._last_ui_update < self._ui_update_interval:
-            return
-        
-        self._last_ui_update = current_time
+        if not is_progress_msg:
+            import time
+            current_time = time.time() * 1000  # 转换为毫秒
+            
+            # 只对非进度消息限制更新频率
+            if current_time - self._last_ui_update < self._ui_update_interval:
+                return
+            
+            self._last_ui_update = current_time
         
         self.t2i_console_display.append(msg)
-        # 移除 QApplication.processEvents()，这是造成UI卡顿的主要原因
         
-        # 使用延迟滚动
-        if not hasattr(self, '_scroll_timer'):
-            self._scroll_timer = QTimer()
-            self._scroll_timer.setSingleShot(True)
-            self._scroll_timer.timeout.connect(lambda: 
-                self.t2i_console_display.verticalScrollBar().setValue(
-                    self.t2i_console_display.verticalScrollBar().maximum()
-                ))
-        self._scroll_timer.start(200)
+        # 对于进度消息，立即滚动；其他消息延迟滚动
+        if is_progress_msg:
+            self.t2i_console_display.verticalScrollBar().setValue(
+                self.t2i_console_display.verticalScrollBar().maximum()
+            )
+        else:
+            # 使用延迟滚动，减少UI操作
+            if not hasattr(self, '_scroll_timer'):
+                self._scroll_timer = QTimer()
+                self._scroll_timer.setSingleShot(True)
+                self._scroll_timer.timeout.connect(lambda: 
+                    self.t2i_console_display.verticalScrollBar().setValue(
+                        self.t2i_console_display.verticalScrollBar().maximum()
+                    ))
+            self._scroll_timer.start(50)  # 进一步减少延迟
 
     def ui_update_t2i_state(self, model_loaded):
         """更新文生图UI状态"""
@@ -914,20 +938,77 @@ class MainWindow(QMainWindow):
                 error_label.setAlignment(Qt.AlignCenter)
                 self.t2i_preview_layout.addWidget(error_label)
 
-    def ui_update_t2i_progress(self, current_step, total_steps):
-        """优化的进度更新，减少UI阻塞"""
-        # 使用更轻量的进度更新
-        progress_percentage = int((current_step / total_steps) * 100)
-        progress_text = f"正在生成... {progress_percentage}%"
+    def ui_update_t2i_progress(self, current_step, total_steps, progress_bar_text):
+        """优化的进度更新，确保实时性和100%完成显示"""
+        # 直接计算百分比，确保准确性
+        if total_steps > 0:
+            # 确保current_step至少为1（因为通常从1开始计数）
+            actual_step = max(1, current_step + 1)  # +1 因为回调中的step通常是0-based
+            percentage = min(100, int((actual_step / total_steps) * 100))
+        else:
+            percentage = 0
         
-        # 只更新按钮文本，避免频繁的控制台输出
-        self.t2i_generate_button.setText(progress_text)
+        # 立即更新按钮文本
+        self.t2i_generate_button.setText(f"生成中({percentage}%)")
         
-        # 只在特定步骤输出控制台信息，避免过度刷新
-        if current_step == 1:
-            self.t2i_console_signal.emit("开始生成图像...\n")
-        elif current_step % 5 == 0 or current_step == total_steps:  # 每5步或最后一步输出
-            self.t2i_console_signal.emit(f"生成进度: {current_step}/{total_steps}\n")
+        # 存储当前进度信息
+        self.t2i_current_step = current_step
+        self.t2i_total_steps = total_steps
+        
+        # 简化的进度条显示
+        if self.t2i_progress_line_start == -1 and self.t2i_is_generating:
+            # 第一次显示进度条时，添加标题并记录位置
+            self.t2i_console_display.append("===== 生成进度 =====")
+            self.t2i_console_display.append("")  # 进度条占位行
+            # 记录进度条所在行号（最后一行）
+            self.t2i_progress_line_start = self.t2i_console_display.document().blockCount() - 1
+        
+        # 只在生成过程中更新进度条
+        if self.t2i_is_generating and self.t2i_progress_line_start != -1:
+            # 构建简洁的进度条文本
+            bar_length = 25
+            filled_length = int(bar_length * percentage / 100)
+            bar = '█' * filled_length + '░' * (bar_length - filled_length)
+            progress_text = f"进度: {percentage}% |{bar}| {actual_step}/{total_steps}"
+            
+            # 使用简单的方式更新进度行
+            try:
+                document = self.t2i_console_display.document()
+                block = document.findBlockByNumber(self.t2i_progress_line_start)
+                if block.isValid():
+                    cursor = self.t2i_console_display.textCursor()
+                    cursor.setPosition(block.position())
+                    cursor.setPosition(block.position() + block.length() - 1, cursor.KeepAnchor)
+                    cursor.insertText(progress_text)
+                    
+                    # 立即处理UI事件，确保及时显示
+                    QApplication.processEvents()
+            except Exception as e:
+                # 如果更新失败，直接追加新的进度信息
+                self.t2i_console_display.append(progress_text)
+                self.t2i_progress_line_start = self.t2i_console_display.document().blockCount() - 1
+        
+        # 确保最后一步显示100%
+        if actual_step >= total_steps and self.t2i_is_generating:
+            # 强制显示100%
+            final_bar = '█' * bar_length
+            final_text = f"进度: 100% |{final_bar}| {total_steps}/{total_steps}"
+            self.t2i_generate_button.setText("生成中(100%)")
+            
+            try:
+                document = self.t2i_console_display.document()
+                block = document.findBlockByNumber(self.t2i_progress_line_start)
+                if block.isValid():
+                    cursor = self.t2i_console_display.textCursor()
+                    cursor.setPosition(block.position())
+                    cursor.setPosition(block.position() + block.length() - 1, cursor.KeepAnchor)
+                    cursor.insertText(final_text)
+                    QApplication.processEvents()
+            except Exception:
+                pass
+            
+            # 添加完成消息
+            QTimer.singleShot(100, lambda: self.t2i_console_display.append("===== 生成完成 =====") if self.t2i_is_generating else None)
 
     # 文生图相关方法
     def t2i_unload_model_action(self):
