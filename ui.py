@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, QSpinBox, QScrollArea, QDialog, QTableWidget, QTableWidgetItem, QHeaderView
-from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QThreadPool, QRunnable, QObject
-from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QThreadPool, QRunnable, QObject, QUrl
+from PyQt5.QtGui import QPixmap, QFont, QDesktopServices
 import threading
 import logging
 import os
@@ -41,8 +41,8 @@ class ModelDownloadDialog(QDialog):
         
         # 创建表格
         self.table = QTableWidget()
-        self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["模型名称", "下载地址"])
+        self.table.setColumnCount(3)  # 增加一列用于放置按钮
+        self.table.setHorizontalHeaderLabels(["模型名称", "下载地址", "操作"])
         self.table.setRowCount(len(self.model_dict))
         
         # 设置表格样式
@@ -54,7 +54,8 @@ class ModelDownloadDialog(QDialog):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 按钮列自适应内容
+
         # 填充表格数据
         for row, (model_name, download_url) in enumerate(self.model_dict.items()):
             # 模型名称
@@ -64,8 +65,13 @@ class ModelDownloadDialog(QDialog):
             
             # 下载地址
             url_item = QTableWidgetItem(download_url)
-            url_item.setToolTip(download_url)  # 设置提示文本显示完整URL
+            url_item.setToolTip(download_url)
             self.table.setItem(row, 1, url_item)
+
+            # 创建并添加“打开”按钮
+            open_button = QPushButton("打开")
+            open_button.clicked.connect(lambda _, url=download_url: self.open_url(url))
+            self.table.setCellWidget(row, 2, open_button)
         
         layout.addWidget(self.table)
         
@@ -86,6 +92,10 @@ class ModelDownloadDialog(QDialog):
         # 设置表格行高
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.verticalHeader().setVisible(False)  # 隐藏行号
+
+    def open_url(self, url_string):
+        """在默认浏览器中打开URL"""
+        QDesktopServices.openUrl(QUrl(url_string))
 
 class WorkerSignals(QObject):
     """工作线程信号类"""
@@ -603,27 +613,57 @@ class MainWindow(QMainWindow):
         self.llm_update_send_button()
 
     def llm_send_message(self):
-        # 发送消息的逻辑
-        def send():
-            user_input = self.llm_user_input.text()
-            self.ui_chat_callback(f"\n\n用户: \n{user_input}\n")
-            self.llm_user_input.clear()
-            self.llm_send_button.setEnabled(False)
-            self.ui_console_callback("LLM消息成功发送，等待输出中......\n")
+        """发送消息的逻辑（使用线程池）"""
+        if 'llm_send' in self.active_workers:
+            self.llm_console_signal.emit("正在生成回复，请稍候...\n")
+            return
+
+        user_input = self.llm_user_input.text().strip()
+        if not user_input:
+            return
+
+        self.llm_user_input.clear()
+        self.llm_send_button.setEnabled(False)
+        self.ui_chat_callback(f"\n\n用户: \n{user_input}\n")
+        self.ui_console_callback("LLM消息成功发送，等待输出中......\n")
+        self.ui_chat_callback("\n助手: \n")
+
+        def send_task():
             try:
                 selected_model = self.llm_model_combo.currentText()
                 prompt = self.llm_manager.llm_build_prompt(user_input, selected_model)
-                self.ui_chat_callback("\n助手: \n")
                 result = self.llm_manager.llm_generate_reply(prompt, self)
-                perf_metrics = result.perf_metrics
-                self.ui_console_callback(f"LLM已成功输出，速度为 {perf_metrics.get_throughput().mean:.2f} tokens/s\n\n")
-                self.llm_manager.llm_append_history(user_input, result)
+                return user_input, result
             except Exception as e:
-                self.ui_chat_callback(f"助手: 无法生成回复，错误: {str(e)}\n\n")
-            finally:
-                self.llm_update_send_button()
+                # 将异常传递给错误处理槽
+                self.llm_chat_signal.emit(f"无法生成回复，错误: {str(e)}\n\n")
+                raise e
 
-        threading.Thread(target=send, daemon=True).start()
+        worker = Worker(send_task)
+        worker.signals.result.connect(self.llm_on_send_success)
+        worker.signals.error.connect(self.llm_on_send_error)
+        worker.signals.finished.connect(self.llm_on_send_finished)
+
+        self.active_workers['llm_send'] = worker
+        self.thread_pool.start(worker)
+
+    def llm_on_send_success(self, result):
+        """LLM发送成功回调"""
+        user_input, assistant_output = result
+        self.llm_manager.llm_append_history(user_input, assistant_output)
+        perf_metrics = assistant_output.perf_metrics
+        throughput = perf_metrics.get_throughput().mean if hasattr(perf_metrics, 'get_throughput') else 'N/A'
+        self.llm_console_signal.emit(f"LLM已成功输出，速度为 {throughput:.2f} tokens/s\n\n")
+
+    def llm_on_send_error(self, error_msg):
+        """LLM发送失败回调"""
+        # 错误信息已在任务中发出，这里只记录日志
+        logging.error(f"LLM回复生成失败: {error_msg}")
+
+    def llm_on_send_finished(self):
+        """LLM发送完成回调"""
+        self.active_workers.pop('llm_send', None)
+        self.llm_update_send_button()
 
     def llm_refresh_model_list(self):
         """刷新LLM模型列表"""
