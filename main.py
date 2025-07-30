@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QApplication  # 确保这行在开头
 import logging
 import sys
+import multiprocessing
 
 # 导入自定义模块
 from logger import setup_logger
@@ -8,6 +9,7 @@ from ui import MainWindow
 
 # 主程序入口
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     # 初始化日志系统并获取日志文件路径
     log_file_path = setup_logger()
     logging.info("程序启动")

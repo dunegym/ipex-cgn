@@ -1,331 +1,213 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, QSpinBox, QScrollArea, QDialog, QTableWidget, QTableWidgetItem, QHeaderView
-from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QThreadPool, QRunnable, QObject, QUrl
-from PyQt5.QtGui import QPixmap, QFont, QDesktopServices
-import threading
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, 
+                             QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, 
+                             QSpinBox, QScrollArea, QDialog, QTableWidget, QTableWidgetItem, 
+                             QHeaderView)
+from PyQt5.QtCore import QTimer, Qt, QUrl
+from PyQt5.QtGui import QPixmap, QFont, QDesktopServices, QTextCursor
 import logging
 import os
-from config import LLM_MODEL_DICT, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, T2I_MODEL_DICT, T2I_QUANTIZATION_LIST
+from queue import Empty
+from config import (LLM_MODEL_DICT, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, 
+                    T2I_MODEL_DICT, T2I_QUANTIZATION_LIST)
 from manager import LLMChatManager, T2IManager
 
 class ModelDownloadDialog(QDialog):
-    """模型下载信息对话框，用于显示模型下载链接并提供打开链接的功能"""
+    """模型下载信息对话框"""
     def __init__(self, model_dict, model_type, parent=None):
-        """
-        初始化模型下载对话框
-        :param model_dict: 模型字典，包含模型名称和下载链接
-        :param model_type: 模型类型（如"文生文"、"文生图"）
-        :param parent: 父窗口
-        """
         super().__init__(parent)
         self.model_dict = model_dict
         self.model_type = model_type
         self.ui_init_download_dialog()
     
     def ui_init_download_dialog(self):
-        """初始化下载对话框UI界面"""
-        # 设置窗口标题和尺寸
         self.setWindowTitle(f"{self.model_type}模型下载")
         self.setGeometry(200, 200, 800, 500)
-        self.setModal(True)  # 设置为模态对话框，阻止与其他窗口交互
-        
-        # 创建主垂直布局
+        self.setModal(True)
         layout = QVBoxLayout(self)
-        
-        # 创建标题标签
         title_label = QLabel(f"{self.model_type}模型下载信息")
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
+        title_font = QFont(); title_font.setPointSize(14); title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
-        
-        # 创建说明文字标签
         info_label = QLabel("请复制下载地址到浏览器或下载工具中下载模型文件")
         info_label.setAlignment(Qt.AlignCenter)
         info_label.setStyleSheet("color: gray; margin: 10px;")
         layout.addWidget(info_label)
-        
-        # 创建表格控件用于显示模型信息
         self.table = QTableWidget()
-        self.table.setColumnCount(3)  # 三列：模型名称、下载地址、操作按钮
+        self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["模型名称", "下载地址", "操作"])
         self.table.setRowCount(len(self.model_dict))
-        
-        # 设置表格样式
-        self.table.setAlternatingRowColors(True)  # 交替行颜色
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)  # 整行选择
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
-        
-        # 设置列宽自适应策略
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 模型名称列自适应内容
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # 下载地址列拉伸填充
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 操作按钮列自适应内容
-
-        # 填充表格数据
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         for row, (model_name, download_url) in enumerate(self.model_dict.items()):
-            # 设置模型名称项
-            name_item = QTableWidgetItem(model_name)
-            name_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 0, name_item)
-            
-            # 设置下载地址项
-            url_item = QTableWidgetItem(download_url)
-            url_item.setToolTip(download_url)  # 鼠标悬停显示完整URL
-            self.table.setItem(row, 1, url_item)
-
-            # 创建并添加"打开"按钮，用于在浏览器中打开下载链接
+            self.table.setItem(row, 0, QTableWidgetItem(model_name))
+            self.table.setItem(row, 1, QTableWidgetItem(download_url))
             open_button = QPushButton("打开")
             open_button.clicked.connect(lambda _, url=download_url: self.open_url(url))
             self.table.setCellWidget(row, 2, open_button)
-        
         layout.addWidget(self.table)
-        
-        # 创建底部按钮布局
-        button_layout = QHBoxLayout()
-        
-        # 创建关闭按钮
         close_button = QPushButton("关闭")
         close_button.clicked.connect(self.close)
-        close_button.setMinimumWidth(100)
-        
-        # 添加弹性空间使按钮居中
-        button_layout.addStretch()
-        button_layout.addWidget(close_button)
-        button_layout.addStretch()
-        
+        button_layout = QHBoxLayout(); button_layout.addStretch(); button_layout.addWidget(close_button); button_layout.addStretch()
         layout.addLayout(button_layout)
-        
-        # 设置表格行高和隐藏行号
-        self.table.verticalHeader().setDefaultSectionSize(40)
-        self.table.verticalHeader().setVisible(False)  # 隐藏行号显示
+        self.table.verticalHeader().setVisible(False)
 
     def open_url(self, url_string):
-        """
-        在默认浏览器中打开指定URL
-        :param url_string: 要打开的URL字符串
-        """
         QDesktopServices.openUrl(QUrl(url_string))
 
-class WorkerSignals(QObject):
-    """工作线程信号类"""
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
-    result = pyqtSignal(object)
-    progress = pyqtSignal(int, int)
-    console = pyqtSignal(str)
-
-class Worker(QRunnable):
-    """通用工作线程类"""
-    def __init__(self, fn, *args, **kwargs):
-        super().__init__()
-        self.fn = fn
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-        
-    def run(self):
-        try:
-            result = self.fn(*self.args, **self.kwargs)
-            self.signals.result.emit(result)
-        except Exception as e:
-            self.signals.error.emit(str(e))
-        finally:
-            self.signals.finished.emit()
-
 class MainWindow(QMainWindow):
-    llm_console_signal = pyqtSignal(str)     # 改名：LLM控制台信号
-    llm_chat_signal = pyqtSignal(str)        # 改名：LLM聊天信号
-    llm_update_ui_signal = pyqtSignal(bool)  # 改名：LLM UI更新信号
-    # T2I相关信号保持不变
-    t2i_console_signal = pyqtSignal(str)
-    t2i_update_ui_signal = pyqtSignal(bool)
-    t2i_image_signal = pyqtSignal(list)
-    t2i_single_image_signal = pyqtSignal(str)  # 新增：用于单张图片实时显示
-    # 添加进度信号到类级别，包含tqdm进度条文本
-    t2i_progress_signal = pyqtSignal(int, int, str)  # current_step, total_steps, progress_bar_text
-    
     def __init__(self):
         super().__init__()
-        # 初始化线程池
-        self.thread_pool = QThreadPool()
-        self.thread_pool.setMaxThreadCount(4)  # 限制最大线程数
+        self.llm_manager = LLMChatManager()
+        self.t2i_manager = T2IManager()
+        self.llm_available_models = self.ui_get_available_llm_models()
+        self.t2i_available_models = self.ui_get_available_t2i_models()
+
+        # 状态标志
+        self.llm_model_loaded = False
+        self.t2i_model_loaded = False
+        self.llm_is_busy = False
+        self.t2i_is_busy = False
+        self.t2i_current_image_num = 0
         
-        # 线程管理
-        self.active_workers = {}  # 跟踪活跃的工作线程
-        
-        self.llm_manager = LLMChatManager()  
-        self.t2i_manager = T2IManager()      
-        self.llm_loading_active = False      
-        self.t2i_loading_active = False     # T2I加载状态标志
-        self.llm_available_models = self.ui_get_available_llm_models()  
-        self.t2i_available_models = self.ui_get_available_t2i_models()  
-        
-        # 添加进度相关变量
-        self.t2i_progress_timer = None
-        self.t2i_current_step = 0
-        self.t2i_total_steps = 0
-        self.t2i_progress_line_start = -1  # 记录进度行开始位置
-        self.t2i_is_generating = False  # 添加生成状态标志
-        
-        # 添加UI刷新控制
-        self._last_ui_update = 0
-        self._ui_update_interval = 50  # 减少到50ms间隔，提高响应速度
-        
-        self.ui_init()  
-        # 连接信号到槽
-        self.llm_console_signal.connect(self.ui_update_llm_console)  
-        self.llm_chat_signal.connect(self.ui_update_llm_chat)        
-        self.llm_update_ui_signal.connect(self.ui_update_llm_state)  
-        # 连接文生图信号到槽
-        self.t2i_console_signal.connect(self.ui_update_t2i_console)
-        self.t2i_update_ui_signal.connect(self.ui_update_t2i_state)
-        self.t2i_image_signal.connect(self.ui_update_t2i_images)
-        self.t2i_single_image_signal.connect(self.ui_append_t2i_image)  # 连接新信号
-        
-        # 连接进度信号
-        self.t2i_progress_signal.connect(self.ui_update_t2i_progress)
+        self.ui_init()
+
+        # 设置一个定时器来处理来自工作进程的队列消息
+        self.queue_timer = QTimer(self)
+        self.queue_timer.timeout.connect(self.process_queues)
+        self.queue_timer.start(100) # 每100毫秒检查一次队列
+
+
 
     def ui_init(self):
-        # 设置窗口标题和大小
         self.setWindowTitle("OpenVINO多功能AI平台")
         self.setGeometry(100, 100, 1600, 1200)
-
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
-        # 主布局
         main_layout = QVBoxLayout(central_widget)
-
-        font = self.font()
-        font.setPointSize(int(font.pointSize() * 1.3))  # 字体放大0.3倍，确保为整数
-        self.setFont(font)
-
-        # 顶部导航栏
+        font = self.font(); font.setPointSize(int(font.pointSize() * 1.3)); self.setFont(font)
         nav_layout = QHBoxLayout()
         self.text_to_text_button = QPushButton("文生文")
         self.text_to_image_button = QPushButton("文生图")
         self.image_to_text_button = QPushButton("图生文")
         self.speech_rec_button = QPushButton("语音识别")
-        
         nav_layout.addWidget(self.text_to_text_button)
         nav_layout.addWidget(self.text_to_image_button)
         nav_layout.addWidget(self.image_to_text_button)
         nav_layout.addWidget(self.speech_rec_button)
-        
         main_layout.addLayout(nav_layout)
-
-        # 用于切换页面的堆叠小部件
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
-
-        # 创建页面
         self.text_to_text_page = self.ui_create_llm_page()
-        self.text_to_image_page = self.ui_create_t2i_page()  # 使用新的文生图页面
+        self.text_to_image_page = self.ui_create_t2i_page()
         self.image_to_text_page = self.ui_create_placeholder_page("图生文功能开发中...")
         self.speech_rec_page = self.ui_create_placeholder_page("语音识别功能开发中...")
-
-        # 将页面添加到堆叠小部件
         self.stacked_widget.addWidget(self.text_to_text_page)
         self.stacked_widget.addWidget(self.text_to_image_page)
         self.stacked_widget.addWidget(self.image_to_text_page)
         self.stacked_widget.addWidget(self.speech_rec_page)
-
-        # 连接导航按钮
         self.text_to_text_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.text_to_image_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.image_to_text_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.speech_rec_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
-
-        # 设置默认页面
         self.stacked_widget.setCurrentIndex(0)
 
     def ui_create_llm_page(self):
-        """创建文生文页面"""
-        llm_page_widget = QWidget()  # 改名
-        llm_layout = QVBoxLayout(llm_page_widget)  # 改名
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("选择模型:"))
+        self.llm_model_combo = QComboBox()
+        if self.llm_available_models: self.llm_model_combo.addItems(self.llm_available_models)
+        else: self.llm_model_combo.addItem("无可用模型"); self.llm_model_combo.setEnabled(False)
+        model_layout.addWidget(self.llm_model_combo)
+        model_layout.addWidget(QLabel("量化精度:"))
+        self.llm_quant_combo = QComboBox(); self.llm_quant_combo.addItems(LLM_QUANTIZATION_LIST)
+        model_layout.addWidget(self.llm_quant_combo)
+        model_layout.addWidget(QLabel("选择设备:"))
+        self.llm_device_combo = QComboBox(); self.llm_device_combo.addItems(LLM_DEVICE_LIST)
+        model_layout.addWidget(self.llm_device_combo)
+        layout.addLayout(model_layout)
+        self.llm_chat_display = QTextEdit(); self.llm_chat_display.setReadOnly(True)
+        layout.addWidget(self.llm_chat_display, 7)
+        btn_layout = QHBoxLayout()
+        self.llm_load_unload_button = QPushButton("加载模型"); self.llm_load_unload_button.clicked.connect(self.llm_toggle_model)
+        btn_layout.addWidget(self.llm_load_unload_button)
+        self.llm_clear_button = QPushButton("清空上下文"); self.llm_clear_button.clicked.connect(self.llm_clear_history_action); self.llm_clear_button.setEnabled(False)
+        btn_layout.addWidget(self.llm_clear_button)
+        self.llm_refresh_button = QPushButton("刷新模型"); self.llm_refresh_button.clicked.connect(self.llm_refresh_model_list)
+        btn_layout.addWidget(self.llm_refresh_button)
+        self.llm_download_button = QPushButton("下载模型"); self.llm_download_button.clicked.connect(self.llm_show_download_dialog)
+        btn_layout.addWidget(self.llm_download_button)
+        layout.addLayout(btn_layout)
+        self.llm_console_display = QTextEdit(); self.llm_console_display.setReadOnly(True); self.llm_console_display.setStyleSheet("background-color: lightgray;")
+        layout.addWidget(self.llm_console_display, 3)
+        input_layout = QHBoxLayout()
+        self.llm_user_input = QLineEdit(); self.llm_user_input.textChanged.connect(self.llm_update_send_button)
+        input_layout.addWidget(self.llm_user_input)
+        self.llm_send_button = QPushButton("发送"); self.llm_send_button.clicked.connect(self.llm_send_message); self.llm_send_button.setEnabled(False)
+        input_layout.addWidget(self.llm_send_button)
+        layout.addLayout(input_layout)
+        return page
 
-        # 模型选择部分
-        llm_model_layout = QHBoxLayout()  # 改名
-        llm_layout.addLayout(llm_model_layout)
-
-        llm_model_label = QLabel("选择模型:")  # 改名
-        llm_model_layout.addWidget(llm_model_label)
-
-        self.llm_model_combo = QComboBox()  # 改名
-        # 使用动态获取的可用模型列表
-        if self.llm_available_models:  # 改名
-            self.llm_model_combo.addItems(self.llm_available_models)
-        else:
-            self.llm_model_combo.addItem("无可用模型")
-            self.llm_model_combo.setEnabled(False)
-        llm_model_layout.addWidget(self.llm_model_combo)
-
-        llm_quant_label = QLabel("量化精度:")  # 改名
-        llm_model_layout.addWidget(llm_quant_label)
-
-        self.llm_quant_combo = QComboBox()  # 改名
-        self.llm_quant_combo.addItems(LLM_QUANTIZATION_LIST)
-        llm_model_layout.addWidget(self.llm_quant_combo)
-
-        llm_device_label = QLabel("选择设备:")  # 改名
-        llm_model_layout.addWidget(llm_device_label)
-
-        self.llm_device_combo = QComboBox()  # 改名
-        self.llm_device_combo.addItems(LLM_DEVICE_LIST)
-        llm_model_layout.addWidget(self.llm_device_combo)
-
-        # 聊天显示部分
-        self.llm_chat_display = QTextEdit()  # 改名
-        self.llm_chat_display.setReadOnly(True)
-        llm_layout.addWidget(self.llm_chat_display, 7)
-        self.llm_chat_display.setStyleSheet("color: black;")
-
-        # 按钮部分
-        llm_button_layout = QHBoxLayout()  # 改名
-        llm_layout.addLayout(llm_button_layout)
-
-        self.llm_load_unload_button = QPushButton("加载模型")  # 改名
-        self.llm_load_unload_button.clicked.connect(self.llm_toggle_model)
-        llm_button_layout.addWidget(self.llm_load_unload_button)
-
-        self.llm_clear_button = QPushButton("清空上下文")  # 改名
-        self.llm_clear_button.clicked.connect(self.llm_clear_history_action)
-        self.llm_clear_button.setEnabled(False)
-        llm_button_layout.addWidget(self.llm_clear_button)
-        
-        self.llm_refresh_button = QPushButton("刷新模型")  # 改名
-        self.llm_refresh_button.clicked.connect(self.llm_refresh_model_list)
-        llm_button_layout.addWidget(self.llm_refresh_button)
-        
-        self.llm_download_button = QPushButton("下载模型")  # 改名
-        self.llm_download_button.clicked.connect(self.llm_show_download_dialog)  # 连接到新的方法
-        llm_button_layout.addWidget(self.llm_download_button)
-
-        # 控制台显示部分
-        self.llm_console_display = QTextEdit()  # 改名
-        self.llm_console_display.setReadOnly(True)
-        self.llm_console_display.setStyleSheet("background-color: lightgray;")
-        llm_layout.addWidget(self.llm_console_display, 3)
-
-        # 用户输入部分
-        llm_input_layout = QHBoxLayout()  # 改名
-        llm_layout.addLayout(llm_input_layout)
-
-        self.llm_user_input = QLineEdit()  # 改名
-        self.llm_user_input.textChanged.connect(self.llm_update_send_button)
-        llm_input_layout.addWidget(self.llm_user_input)
-
-        self.llm_send_button = QPushButton("发送")  # 改名
-        self.llm_send_button.clicked.connect(self.llm_send_message)
-        self.llm_send_button.setEnabled(False)
-        llm_input_layout.addWidget(self.llm_send_button)
-        
-        return llm_page_widget
+    def ui_create_t2i_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("选择模型:"))
+        self.t2i_model_combo = QComboBox()
+        if self.t2i_available_models: self.t2i_model_combo.addItems(self.t2i_available_models)
+        else: self.t2i_model_combo.addItem("无可用模型"); self.t2i_model_combo.setEnabled(False)
+        model_layout.addWidget(self.t2i_model_combo)
+        model_layout.addWidget(QLabel("量化精度:"))
+        self.t2i_quant_combo = QComboBox(); self.t2i_quant_combo.addItems(T2I_QUANTIZATION_LIST)
+        model_layout.addWidget(self.t2i_quant_combo)
+        layout.addLayout(model_layout)
+        prompt_layout = QVBoxLayout()
+        prompt_layout.addWidget(QLabel("提示词:"))
+        self.t2i_prompt_input = QTextEdit(); self.t2i_prompt_input.setMaximumHeight(80); self.t2i_prompt_input.setPlaceholderText("输入图像生成提示词...")
+        prompt_layout.addWidget(self.t2i_prompt_input)
+        prompt_layout.addWidget(QLabel("反向提示词:"))
+        self.t2i_neg_prompt_input = QTextEdit(); self.t2i_neg_prompt_input.setMaximumHeight(60); self.t2i_neg_prompt_input.setPlaceholderText("输入不希望出现的内容...")
+        prompt_layout.addWidget(self.t2i_neg_prompt_input)
+        layout.addLayout(prompt_layout)
+        params_layout = QHBoxLayout()
+        params_layout.addWidget(QLabel("迭代次数:")); self.t2i_steps_input = QSpinBox(); self.t2i_steps_input.setRange(1, 100); self.t2i_steps_input.setValue(20); params_layout.addWidget(self.t2i_steps_input)
+        params_layout.addWidget(QLabel("种子:")); self.t2i_seed_input = QSpinBox(); self.t2i_seed_input.setRange(-1, 999999); self.t2i_seed_input.setValue(-1); self.t2i_seed_input.setSpecialValueText("随机"); params_layout.addWidget(self.t2i_seed_input)
+        params_layout.addWidget(QLabel("宽度:")); self.t2i_width_input = QSpinBox(); self.t2i_width_input.setRange(256, 512); self.t2i_width_input.setValue(512); self.t2i_width_input.setSingleStep(8); params_layout.addWidget(self.t2i_width_input)
+        params_layout.addWidget(QLabel("高度:")); self.t2i_height_input = QSpinBox(); self.t2i_height_input.setRange(256, 512); self.t2i_height_input.setValue(512); self.t2i_height_input.setSingleStep(8); params_layout.addWidget(self.t2i_height_input)
+        params_layout.addWidget(QLabel("生图数量:")); self.t2i_num_images_input = QSpinBox(); self.t2i_num_images_input.setRange(1, 100); self.t2i_num_images_input.setValue(1); params_layout.addWidget(self.t2i_num_images_input)
+        layout.addLayout(params_layout)
+        btn_layout = QHBoxLayout()
+        self.t2i_load_unload_button = QPushButton("加载模型"); self.t2i_load_unload_button.clicked.connect(self.t2i_toggle_model)
+        btn_layout.addWidget(self.t2i_load_unload_button)
+        self.t2i_generate_button = QPushButton("生成图像"); self.t2i_generate_button.clicked.connect(self.t2i_generate_image); self.t2i_generate_button.setEnabled(False)
+        btn_layout.addWidget(self.t2i_generate_button)
+        self.t2i_refresh_button = QPushButton("刷新模型"); self.t2i_refresh_button.clicked.connect(self.t2i_refresh_model_list)
+        btn_layout.addWidget(self.t2i_refresh_button)
+        self.t2i_download_button = QPushButton("下载模型"); self.t2i_download_button.clicked.connect(self.t2i_show_download_dialog)
+        btn_layout.addWidget(self.t2i_download_button)
+        layout.addLayout(btn_layout)
+        bottom_layout = QHBoxLayout()
+        preview_widget = QWidget(); preview_layout = QVBoxLayout(preview_widget); preview_layout.addWidget(QLabel("图片预览:"))
+        self.t2i_preview_area = QScrollArea(); self.t2i_preview_area.setWidgetResizable(True); self.t2i_preview_area.setMinimumHeight(300)
+        self.t2i_preview_container = QWidget(); self.t2i_preview_layout = QVBoxLayout(self.t2i_preview_container)
+        self.t2i_preview_area.setWidget(self.t2i_preview_container)
+        preview_layout.addWidget(self.t2i_preview_area)
+        bottom_layout.addWidget(preview_widget, 2)
+        console_widget = QWidget(); console_layout = QVBoxLayout(console_widget); console_layout.addWidget(QLabel("控制台:"))
+        self.t2i_console_display = QTextEdit(); self.t2i_console_display.setReadOnly(True); self.t2i_console_display.setStyleSheet("background-color: lightgray;"); self.t2i_console_display.setMinimumHeight(300)
+        console_layout.addWidget(self.t2i_console_display)
+        bottom_layout.addWidget(console_widget, 3)
+        layout.addLayout(bottom_layout)
+        return page
 
     def ui_create_placeholder_page(self, text):
-        """为正在开发的功能创建占位页面"""
         page_widget = QWidget()
         layout = QVBoxLayout(page_widget)
         label = QLabel(text)
@@ -333,856 +215,336 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
         return page_widget
 
-    def ui_create_t2i_page(self):
-        """创建文生图页面"""
-        page_widget = QWidget()
-        layout = QVBoxLayout(page_widget)
-
-        # 模型选择部分
-        model_layout = QHBoxLayout()
-        layout.addLayout(model_layout)
-
-        model_label = QLabel("选择模型:")
-        model_layout.addWidget(model_label)
-
-        self.t2i_model_combo = QComboBox()
-        # 使用动态获取的可用文生图模型列表
-        if self.t2i_available_models:
-            self.t2i_model_combo.addItems(self.t2i_available_models)
-        else:
-            self.t2i_model_combo.addItem("无可用模型")
-            self.t2i_model_combo.setEnabled(False)
-        model_layout.addWidget(self.t2i_model_combo)
-
-        quant_label = QLabel("量化精度:")
-        model_layout.addWidget(quant_label)
-
-        self.t2i_quant_combo = QComboBox()
-        self.t2i_quant_combo.addItems(T2I_QUANTIZATION_LIST)
-        model_layout.addWidget(self.t2i_quant_combo)
-
-        # 提示词输入部分
-        prompt_layout = QVBoxLayout()
-        layout.addLayout(prompt_layout)
-
-        prompt_label = QLabel("提示词:")
-        prompt_layout.addWidget(prompt_label)
-
-        self.t2i_prompt_input = QTextEdit()
-        self.t2i_prompt_input.setMaximumHeight(80)
-        self.t2i_prompt_input.setPlaceholderText("输入图像生成提示词...")
-        prompt_layout.addWidget(self.t2i_prompt_input)
-
-        neg_prompt_label = QLabel("反向提示词:")
-        prompt_layout.addWidget(neg_prompt_label)
-
-        self.t2i_neg_prompt_input = QTextEdit()
-        self.t2i_neg_prompt_input.setMaximumHeight(60)
-        self.t2i_neg_prompt_input.setPlaceholderText("输入不希望出现的内容...")
-        prompt_layout.addWidget(self.t2i_neg_prompt_input)
-
-        # 参数设置部分
-        params_layout = QHBoxLayout()
-        layout.addLayout(params_layout)
-
-        # 迭代次数
-        steps_label = QLabel("迭代次数:")
-        params_layout.addWidget(steps_label)
-        self.t2i_steps_input = QSpinBox()
-        self.t2i_steps_input.setRange(1, 100)
-        self.t2i_steps_input.setValue(20)
-        params_layout.addWidget(self.t2i_steps_input)
-
-        # 种子
-        seed_label = QLabel("种子:")
-        params_layout.addWidget(seed_label)
-        self.t2i_seed_input = QSpinBox()
-        self.t2i_seed_input.setRange(-1, 999999)
-        self.t2i_seed_input.setValue(-1)  # -1表示随机
-        self.t2i_seed_input.setSpecialValueText("随机")
-        params_layout.addWidget(self.t2i_seed_input)
-
-        # 图片宽度 - 限制范围为256-512，步长为8，禁止手动输入
-        width_label = QLabel("宽度:")
-        params_layout.addWidget(width_label)
-        self.t2i_width_input = QSpinBox()
-        self.t2i_width_input.setRange(256, 512)  # 修改范围
-        self.t2i_width_input.setValue(512)
-        self.t2i_width_input.setSingleStep(8)  # 确保步长为8
-        self.t2i_width_input.setReadOnly(True)  # 禁止手动输入数字
-        self.t2i_width_input.setButtonSymbols(QSpinBox.UpDownArrows)  # 只显示上下箭头
-        params_layout.addWidget(self.t2i_width_input)
-
-        # 图片高度 - 限制范围为256-512，步长为8，禁止手动输入
-        height_label = QLabel("高度:")
-        params_layout.addWidget(height_label)
-        self.t2i_height_input = QSpinBox()
-        self.t2i_height_input.setRange(256, 512)  # 修改范围
-        self.t2i_height_input.setValue(512)
-        self.t2i_height_input.setSingleStep(8)  # 确保步长为8
-        self.t2i_height_input.setReadOnly(True)  # 禁止手动输入数字
-        self.t2i_height_input.setButtonSymbols(QSpinBox.UpDownArrows)  # 只显示上下箭头
-        params_layout.addWidget(self.t2i_height_input)
-
-        # 生图数量 - 限制范围为1-100
-        num_images_label = QLabel("生图数量:")
-        params_layout.addWidget(num_images_label)
-        self.t2i_num_images_input = QSpinBox()
-        self.t2i_num_images_input.setRange(1, 100)
-        self.t2i_num_images_input.setValue(1)
-        self.t2i_num_images_input.setSingleStep(1)
-        params_layout.addWidget(self.t2i_num_images_input)
-
-        # 按钮部分
-        button_layout = QHBoxLayout()
-        layout.addLayout(button_layout)
-
-        self.t2i_load_unload_button = QPushButton("加载模型")
-        self.t2i_load_unload_button.clicked.connect(self.t2i_toggle_model)
-        button_layout.addWidget(self.t2i_load_unload_button)
-
-        self.t2i_generate_button = QPushButton("生成图像")
-        self.t2i_generate_button.clicked.connect(self.t2i_generate_image)
-        self.t2i_generate_button.setEnabled(False)
-        button_layout.addWidget(self.t2i_generate_button)
-
-        self.t2i_refresh_button = QPushButton("刷新模型")
-        self.t2i_refresh_button.clicked.connect(self.t2i_refresh_model_list)
-        button_layout.addWidget(self.t2i_refresh_button)
-
-        self.t2i_download_button = QPushButton("下载模型")
-        self.t2i_download_button.clicked.connect(self.t2i_show_download_dialog)  # 连接到新的方法
-        button_layout.addWidget(self.t2i_download_button)
-
-        # 下方区域：左侧图片预览，右侧控制台
-        bottom_layout = QHBoxLayout()
-        layout.addLayout(bottom_layout)
-
-        # 左侧图片预览区
-        preview_widget = QWidget()
-        preview_layout = QVBoxLayout(preview_widget)
-        preview_label = QLabel("图片预览:")
-        preview_layout.addWidget(preview_label)
-
-        self.t2i_preview_area = QScrollArea()
-        self.t2i_preview_area.setWidgetResizable(True)
-        self.t2i_preview_area.setMinimumHeight(300)
+    def process_queues(self):
+        # 处理LLM队列
+        if self.llm_manager.llm_output_queue:
+            while not self.llm_manager.llm_output_queue.empty():
+                try:
+                    msg = self.llm_manager.llm_output_queue.get_nowait()
+                    self.handle_llm_message(msg)
+                except Empty:
+                    break
         
-        # 创建预览容器
-        self.t2i_preview_container = QWidget()
-        self.t2i_preview_layout = QVBoxLayout(self.t2i_preview_container)
-        self.t2i_preview_area.setWidget(self.t2i_preview_container)
-        
-        preview_layout.addWidget(self.t2i_preview_area)
-        bottom_layout.addWidget(preview_widget, 2)  # 预览区比例调整为2
+        # 处理T2I队列
+        if self.t2i_manager.t2i_output_queue:
+            while not self.t2i_manager.t2i_output_queue.empty():
+                try:
+                    msg = self.t2i_manager.t2i_output_queue.get_nowait()
+                    self.handle_t2i_message(msg)
+                except Empty:
+                    break
 
-        # 右侧控制台
-        console_widget = QWidget()
-        console_layout = QVBoxLayout(console_widget)
-        console_label = QLabel("控制台:")
-        console_layout.addWidget(console_label)
+    def handle_llm_message(self, msg):
+        status = msg.get('status')
+        if status == 'progress':
+            self.ui_update_llm_console(msg.get('data', ''))
+        elif status == 'load_success':
+            self.llm_model_loaded = True
+            self.llm_is_busy = False
+            self.ui_update_llm_state()
+            self.ui_update_llm_console(f"LLM模型加载成功！耗时：{msg.get('load_time', 0):.2f} 秒\n\n")
+        elif status == 'unload_success':
+            self.llm_model_loaded = False
+            self.llm_is_busy = False
+            self.llm_manager.llm_tokenizer = None # 清理tokenizer
+            self.ui_update_llm_state()
+            self.ui_update_llm_console("LLM模型已成功卸载！\n\n")
+        elif status == 'chat_chunk':
+            self.llm_chat_display.insertPlainText(msg.get('data', ''))
+        elif status == 'chat_done':
+            self.llm_is_busy = False
+            self.ui_update_llm_state()
+        elif status == 'generate_success':
+            self.llm_is_busy = False
+            self.ui_update_llm_state()
+            self.ui_update_llm_console(f"LLM生成完成, 速度: {msg.get('throughput', 'N/A')} tokens/s\n")
+        elif status == 'error':
+            self.llm_is_busy = False
+            self.ui_update_llm_state()
+            self.ui_update_llm_console(f"LLM错误: {msg.get('message', '未知错误')}\n")
 
-        self.t2i_console_display = QTextEdit()
-        self.t2i_console_display.setReadOnly(True)
-        self.t2i_console_display.setStyleSheet("background-color: lightgray;")
-        self.t2i_console_display.setMinimumHeight(300)
-        console_layout.addWidget(self.t2i_console_display)
-        bottom_layout.addWidget(console_widget, 3)  # 控制台比例调整为3，使其更宽
-
-        return page_widget
-
-    def ui_get_available_llm_models(self):  # 改名：方法名更明确
-        """检查model文件夹下实际存在的LLM模型"""
-        llm_available_models = []  # 改名：变量名更明确
-        model_dir = os.path.join(os.path.dirname(__file__), 'model')
-        
-        # 如果model文件夹不存在，返回空列表
-        if not os.path.exists(model_dir):
-            logging.warning(f"[LLM] 模型文件夹不存在: {model_dir}")
-            return llm_available_models
-        
-        # 遍历配置文件中的LLM模型字典的键
-        for llm_model_name in LLM_MODEL_DICT.keys():  # 修改：从字典的键获取模型名
-            llm_model_path = os.path.join(model_dir, llm_model_name)  # 改名
-            # 检查模型文件夹是否存在
-            if os.path.exists(llm_model_path) and os.path.isdir(llm_model_path):
-                llm_available_models.append(llm_model_name)
-                logging.info(f"[LLM] 发现可用LLM模型: {llm_model_name}")
-            else:
-                logging.info(f"[LLM] LLM模型不存在: {llm_model_name}")
-        
-        if not llm_available_models:
-            logging.warning("[LLM] 未找到任何可用LLM模型")
-        else:
-            logging.info(f"[LLM] 总共找到 {len(llm_available_models)} 个可用LLM模型")
-        
-        return llm_available_models
-
-    def ui_get_available_t2i_models(self):
-        """检查model文件夹下实际存在的文生图模型"""
-        t2i_available_models = []  # 改名：变量名更明确
-        model_dir = os.path.join(os.path.dirname(__file__), 'model')
-        
-        # 如果model文件夹不存在，返回空列表
-        if not os.path.exists(model_dir):
-            logging.warning(f"[T2I] 模型文件夹不存在: {model_dir}")
-            return t2i_available_models
-        
-        # 遍历配置文件中的文生图模型字典的键
-        for t2i_model_name in T2I_MODEL_DICT.keys():  # 修改：从字典的键获取模型名
-            t2i_model_path = os.path.join(model_dir, t2i_model_name)  # 改名
-            # 检查模型文件夹是否存在
-            if os.path.exists(t2i_model_path) and os.path.isdir(t2i_model_path):
-                t2i_available_models.append(t2i_model_name)
-                logging.info(f"[T2I] 发现可用文生图模型: {t2i_model_name}")
-            else:
-                logging.info(f"[T2I] 文生图模型不存在: {t2i_model_name}")
-        
-        if not t2i_available_models:
-            logging.warning("[T2I] 未找到任何可用文生图模型")
-        else:
-            logging.info(f"[T2I] 总共找到 {len(t2i_available_models)} 个可用文生图模型")
-        
-        return t2i_available_models
+    def handle_t2i_message(self, msg):
+        status = msg.get('status')
+        if status == 'progress':
+            self.ui_update_t2i_console(msg.get('data', ''))
+        elif status == 'load_success':
+            self.t2i_model_loaded = True
+            self.t2i_is_busy = False
+            self.ui_update_t2i_state()
+            self.ui_update_t2i_console(f"T2I模型加载成功！耗时：{msg.get('load_time', 0):.2f} 秒\n\n")
+        elif status == 'unload_success':
+            self.t2i_model_loaded = False
+            self.t2i_is_busy = False
+            self.ui_update_t2i_state()
+            self.ui_update_t2i_console("T2I模型已成功卸载！\n\n")
+        elif status == 'image_generated':
+            self.ui_append_t2i_image(msg.get('path'))
+        elif status == 't2i_progress_update':
+            self.ui_update_t2i_progress(msg['step'], msg['total'], msg['image_num'], msg['total_images'])
+        elif status == 'generate_success':
+            self.t2i_is_busy = False
+            self.ui_update_t2i_state()
+            self.t2i_generate_button.setText("生成图像") # 恢复按钮文本
+            self.ui_update_t2i_console("\n--- 所有图像生成完毕 ---\n\n")
+        elif status == 'error':
+            self.t2i_is_busy = False
+            self.ui_update_t2i_state()
+            self.ui_update_t2i_console(f"T2I错误: {msg.get('message', '未知错误')}\n")
 
     def llm_toggle_model(self):
-        # 根据当前状态决定是加载还是卸载模型
-        if self.llm_manager.llm_pipe is None:
-            # 如果模型未加载，则加载模型
+        if self.llm_is_busy: return
+        if not self.llm_model_loaded:
             self.llm_load_model_action()
         else:
-            # 如果模型已加载，则卸载模型
             self.llm_unload_model_action()
 
     def llm_load_model_action(self):
-        """优化后的LLM模型加载"""
-        # 防止重复操作
-        if 'llm_load' in self.active_workers:
-            self.llm_console_signal.emit("模型正在加载中，请等待...\n")
-            return
-            
-        self.llm_load_unload_button.setEnabled(False)
-        self.llm_load_unload_button.setText("正在加载...")
-        self.llm_console_signal.emit("开始加载LLM模型......\n")
-        
-        # 创建工作线程
-        def load_task():
-            try:
-                selected_model = self.llm_model_combo.currentText()
-                selected_quant = self.llm_quant_combo.currentText() 
-                selected_device = self.llm_device_combo.currentText()
-                
-                success = self.llm_manager.llm_load_model(
-                    selected_model, 
-                    selected_quant, 
-                    selected_device, 
-                    lambda msg: self.llm_console_signal.emit(msg)
-                )
-                return success
-            except Exception as e:
-                raise e
-        
-        worker = Worker(load_task)
-        worker.signals.result.connect(self.llm_on_load_success)
-        worker.signals.error.connect(self.llm_on_load_error)
-        worker.signals.finished.connect(lambda: self.llm_on_load_finished())
-        
-        # 记录活跃工作线程
-        self.active_workers['llm_load'] = worker
-        self.thread_pool.start(worker)
-
-    def llm_on_load_success(self, success):
-        """LLM加载成功回调"""
-        self.llm_update_ui_signal.emit(success)
-
-    def llm_on_load_error(self, error_msg):
-        """LLM加载错误回调"""
-        self.llm_console_signal.emit(f"模型加载失败: {error_msg}\n")
-        self.llm_update_ui_signal.emit(False)
-
-    def llm_on_load_finished(self):
-        """LLM加载完成回调"""
-        # 清理工作线程记录
-        self.active_workers.pop('llm_load', None)
-        self.llm_load_unload_button.setEnabled(True)
+        self.llm_is_busy = True
+        self.ui_update_llm_state()
+        selected_model = self.llm_model_combo.currentText()
+        selected_quant = self.llm_quant_combo.currentText()
+        selected_device = self.llm_device_combo.currentText()
+        self.llm_manager.llm_load_model(selected_model, selected_quant, selected_device)
 
     def llm_unload_model_action(self):
-        # 禁用按钮并更新文本
-        self.llm_load_unload_button.setEnabled(False)
-        self.llm_load_unload_button.setText("正在卸载...")
-        
-        # 卸载模型的逻辑
-        self.llm_manager.llm_unload_model(self.ui_console_callback)
-        
-        # 更新UI状态
-        self.llm_update_ui_signal.emit(False)  # 传递False表示模型已卸载
+        self.llm_is_busy = True
+        self.ui_update_llm_state()
+        self.llm_manager.llm_unload_model()
         
     def llm_clear_history_action(self):
-        # 清空聊天历史记录的逻辑
         self.llm_manager.llm_clear_history()
-        self.ui_console_callback("LLM上下文已清空\n\n")
-        self.llm_update_send_button()
+        self.llm_chat_display.clear()
+        self.ui_update_llm_console("LLM上下文已清空\n\n")
 
     def llm_send_message(self):
-        """发送消息的逻辑（使用线程池）"""
-        if 'llm_send' in self.active_workers:
-            self.llm_console_signal.emit("正在生成回复，请稍候...\n")
-            return
-
+        if self.llm_is_busy: return
         user_input = self.llm_user_input.text().strip()
-        if not user_input:
-            return
-
+        if not user_input: return
+        
+        self.llm_is_busy = True
+        self.ui_update_llm_state()
         self.llm_user_input.clear()
-        self.llm_send_button.setEnabled(False)
-        self.ui_chat_callback(f"\n\n用户: \n{user_input}\n")
-        self.ui_console_callback("LLM消息成功发送，等待输出中......\n")
-        self.ui_chat_callback("\n助手: \n")
-
-        def send_task():
-            try:
-                selected_model = self.llm_model_combo.currentText()
-                prompt = self.llm_manager.llm_build_prompt(user_input, selected_model)
-                result = self.llm_manager.llm_generate_reply(prompt, self)
-                return user_input, result
-            except Exception as e:
-                # 将异常传递给错误处理槽
-                self.llm_chat_signal.emit(f"无法生成回复，错误: {str(e)}\n\n")
-                raise e
-
-        worker = Worker(send_task)
-        worker.signals.result.connect(self.llm_on_send_success)
-        worker.signals.error.connect(self.llm_on_send_error)
-        worker.signals.finished.connect(self.llm_on_send_finished)
-
-        self.active_workers['llm_send'] = worker
-        self.thread_pool.start(worker)
-
-    def llm_on_send_success(self, result):
-        """LLM发送成功回调"""
-        user_input, assistant_output = result
-        self.llm_manager.llm_append_history(user_input, assistant_output)
-        perf_metrics = assistant_output.perf_metrics
-        throughput = perf_metrics.get_throughput().mean if hasattr(perf_metrics, 'get_throughput') else 'N/A'
-        self.llm_console_signal.emit(f"LLM已成功输出，速度为 {throughput:.2f} tokens/s\n\n")
-
-    def llm_on_send_error(self, error_msg):
-        """LLM发送失败回调"""
-        # 错误信息已在任务中发出，这里只记录日志
-        logging.error(f"LLM回复生成失败: {error_msg}")
-
-    def llm_on_send_finished(self):
-        """LLM发送完成回调"""
-        self.active_workers.pop('llm_send', None)
-        self.llm_update_send_button()
+        self.llm_chat_display.append(f"\n\n<b>用户:</b>\n{user_input}\n")
+        self.llm_chat_display.append("\n<b>助手:</b>\n")
+        
+        selected_model = self.llm_model_combo.currentText()
+        prompt = self.llm_manager.llm_build_prompt(user_input, selected_model)
+        self.llm_manager.llm_append_history(user_input, "") # 预先添加历史，回复由streamer填充
+        self.llm_manager.llm_generate_reply(prompt)
 
     def llm_refresh_model_list(self):
-        """刷新LLM模型列表"""
-        # 重新获取可用模型
-        self.llm_available_models = self.ui_get_available_llm_models()  # 改名
-        
-        # 清空当前下拉框
+        self.llm_available_models = self.ui_get_available_llm_models()
         self.llm_model_combo.clear()
-        
-        # 重新填充下拉框
         if self.llm_available_models:
             self.llm_model_combo.addItems(self.llm_available_models)
             self.llm_model_combo.setEnabled(True)
-            self.ui_console_callback(f"[LLM] 模型列表已刷新，找到 {len(self.llm_available_models)} 个可用模型\n")
-            logging.info(f"[LLM] 刷新模型列表完成，可用模型: {self.llm_available_models}")
         else:
-            self.llm_model_combo.addItem("无可用模型")
-            self.llm_model_combo.setEnabled(False)
-            self.ui_console_callback("[LLM] 未找到任何可用模型，请检查model文件夹\n")
-            logging.warning("[LLM] 刷新后未找到任何可用模型")
+            self.llm_model_combo.addItem("无可用模型"); self.llm_model_combo.setEnabled(False)
+        self.ui_update_llm_console("[LLM] 模型列表已刷新\n")
 
-    def ui_update_llm_console(self, msg):  # 改名
+    def ui_update_llm_console(self, msg):
         self.llm_console_display.append(msg)
-        self.llm_console_display.verticalScrollBar().setValue(
-            self.llm_console_display.verticalScrollBar().maximum()
-        )
-        QApplication.processEvents()
+        self.llm_console_display.verticalScrollBar().setValue(self.llm_console_display.verticalScrollBar().maximum())
 
-    def ui_update_llm_chat(self, msg):  # 改名
-        self.llm_chat_display.insertPlainText(msg)
-
-    def ui_update_llm_state(self, model_loaded):  # 改名
+    def ui_update_llm_state(self):
+        model_loaded = self.llm_model_loaded
+        is_busy = self.llm_is_busy
         self.llm_load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
-        self.llm_load_unload_button.setEnabled(True)  # 操作完成后启用按钮
-        self.llm_clear_button.setEnabled(model_loaded)
-        self.llm_user_input.setEnabled(model_loaded)
-        self.llm_update_send_button()
+        self.llm_load_unload_button.setEnabled(not is_busy)
+        if is_busy and not model_loaded: self.llm_load_unload_button.setText("正在加载...")
+        if is_busy and model_loaded: self.llm_load_unload_button.setText("正在操作...")
+        
+        self.llm_clear_button.setEnabled(model_loaded and not is_busy)
+        self.llm_user_input.setEnabled(model_loaded and not is_busy)
+        self.llm_send_button.setEnabled(model_loaded and not is_busy and bool(self.llm_user_input.text().strip()))
 
     def llm_update_send_button(self):
-        # 更新发送按钮的状态
-        is_enabled = bool(self.llm_user_input.text().strip()) and self.llm_manager.llm_pipe is not None
-        self.llm_send_button.setEnabled(is_enabled)
-        self.llm_user_input.setEnabled(self.llm_manager.llm_pipe is not None)
-        self.llm_clear_button.setEnabled(self.llm_manager.llm_pipe is not None)
+        self.ui_update_llm_state()
 
     def llm_show_download_dialog(self):
-        """显示LLM模型下载对话框"""
         dialog = ModelDownloadDialog(LLM_MODEL_DICT, "文生文", self)
-        dialog.exec_()  # 使用exec_()显示模态对话框
-
-    def ui_get_available_t2i_models(self):
-        """检查model文件夹下实际存在的文生图模型"""
-        t2i_available_models = []  # 改名：变量名更明确
-        model_dir = os.path.join(os.path.dirname(__file__), 'model')
-        
-        # 如果model文件夹不存在，返回空列表
-        if not os.path.exists(model_dir):
-            logging.warning(f"[T2I] 模型文件夹不存在: {model_dir}")
-            return t2i_available_models
-        
-        # 遍历配置文件中的文生图模型字典的键
-        for t2i_model_name in T2I_MODEL_DICT.keys():  # 修改：从字典的键获取模型名
-            t2i_model_path = os.path.join(model_dir, t2i_model_name)  # 改名
-            # 检查模型文件夹是否存在
-            if os.path.exists(t2i_model_path) and os.path.isdir(t2i_model_path):
-                t2i_available_models.append(t2i_model_name)
-                logging.info(f"[T2I] 发现可用文生图模型: {t2i_model_name}")
-            else:
-                logging.info(f"[T2I] 文生图模型不存在: {t2i_model_name}")
-        
-        if not t2i_available_models:
-            logging.warning("[T2I] 未找到任何可用文生图模型")
-        else:
-            logging.info(f"[T2I] 总共找到 {len(t2i_available_models)} 个可用文生图模型")
-        
-        return t2i_available_models
+        dialog.exec_()
 
     def t2i_toggle_model(self):
-        """切换文生图模型加载/卸载"""
-        if self.t2i_manager.t2i_pipe is None:
+        if self.t2i_is_busy: return
+        if not self.t2i_model_loaded:
             self.t2i_load_model_action()
         else:
             self.t2i_unload_model_action()
 
     def t2i_load_model_action(self):
-        """优化后的文生图模型加载"""
-        # 防止重复操作
-        if 't2i_load' in self.active_workers:
-            self.t2i_console_signal.emit("模型正在加载中，请等待...\n")
-            return
-        
-        self.t2i_load_unload_button.setEnabled(False)
-        self.t2i_load_unload_button.setText("正在加载...")
-        self.t2i_console_signal.emit("开始加载文生图模型......\n")
-        
-        # 创建工作线程
-        def load_task():
-            try:
-                selected_model = self.t2i_model_combo.currentText()
-                selected_quant = self.t2i_quant_combo.currentText()
-                
-                success = self.t2i_manager.t2i_load_model(
-                    selected_model, 
-                    selected_quant, 
-                    lambda msg: self.t2i_console_signal.emit(msg)
-                )
-                return success
-            except Exception as e:
-                raise e
-    
-        worker = Worker(load_task)
-        worker.signals.result.connect(self.t2i_on_load_success)
-        worker.signals.error.connect(self.t2i_on_load_error)
-        worker.signals.finished.connect(self.t2i_on_load_finished)
-        
-        # 记录活跃工作线程
-        self.active_workers['t2i_load'] = worker
-        self.thread_pool.start(worker)
-
-    def t2i_on_load_success(self, success):
-        """T2I加载成功回调"""
-        self.t2i_update_ui_signal.emit(success)
-
-    def t2i_on_load_error(self, error_msg):
-        """T2I加载错误回调"""
-        self.t2i_console_signal.emit(f"模型加载失败: {error_msg}\n")
-        self.t2i_update_ui_signal.emit(False)
-
-    def t2i_on_load_finished(self):
-        """T2I加载完成回调"""
-        # 清理工作线程记录
-        self.active_workers.pop('t2i_load', None)
-        self.t2i_load_unload_button.setEnabled(True)
-        self.t2i_loading_active = False
+        self.t2i_is_busy = True
+        self.ui_update_t2i_state()
+        selected_model = self.t2i_model_combo.currentText()
+        selected_quant = self.t2i_quant_combo.currentText()
+        self.t2i_manager.t2i_load_model(selected_model, selected_quant)
 
     def t2i_unload_model_action(self):
-        """卸载文生图模型"""
-        self.t2i_load_unload_button.setEnabled(False)
-        self.t2i_load_unload_button.setText("正在卸载...")
-        
-        self.t2i_manager.t2i_unload_model(
-            lambda msg: self.t2i_console_signal.emit(msg)
-        )
-        
-        self.t2i_update_ui_signal.emit(False)
+        self.t2i_is_busy = True
+        self.ui_update_t2i_state()
+        self.t2i_manager.t2i_unload_model()
 
     def t2i_generate_image(self):
-        """优化后的图像生成，加入资源检查"""
-        if not self.t2i_manager.t2i_pipe:
-            self.t2i_console_signal.emit("请先加载模型\n")
-            return
-        
-        # 检查系统资源
-        if not self.ui_check_system_resources():
-            self.t2i_console_signal.emit("系统资源不足，建议稍后再试\n")
-            return
-        
-        # 防止重复生成
-        if 't2i_generate' in self.active_workers:
-            self.t2i_console_signal.emit("图像正在生成中，请等待...\n")
-            return
-            
-        # 清空预览区
-        self.ui_clear_t2i_preview()
-
-        # 重置进度条状态 - 关键修复点1
-        self.t2i_progress_line_start = -1
-        self.t2i_is_generating = True
-        self.t2i_current_step = 0
-        self.t2i_total_steps = 0
-            
-        self.t2i_generate_button.setEnabled(False)
-        self.t2i_generate_button.setText("正在生成...")
-        
-        # 获取参数
+        if self.t2i_is_busy or not self.t2i_model_loaded: return
         prompt = self.t2i_prompt_input.toPlainText().strip()
-        neg_prompt = self.t2i_neg_prompt_input.toPlainText().strip()
-        steps = self.t2i_steps_input.value()
-        seed = self.t2i_seed_input.value() if self.t2i_seed_input.value() >= 0 else None
-        width = self.t2i_width_input.value()
-        height = self.t2i_height_input.value()
-        num_images = self.t2i_num_images_input.value()
-        
         if not prompt:
-            self.t2i_console_signal.emit("请输入提示词\n")
-            self.t2i_generate_button.setEnabled(True)
-            self.t2i_generate_button.setText("生成图像")
-            self.t2i_is_generating = False
+            self.ui_update_t2i_console("请输入提示词\n")
             return
+            
+        self.t2i_is_busy = True
+        self.t2i_current_image_num = 0 # Reset for new generation sequence
+        self.ui_update_t2i_state()
+        self.ui_clear_t2i_preview()
         
-        # 创建可取消的工作线程
-        def generate_task():
-            try:
-                def progress_callback(step, total_steps, progress_bar_text):
-                    self.t2i_progress_signal.emit(step, total_steps, progress_bar_text)
-
-                def image_generated_callback(image_path):
-                    self.t2i_single_image_signal.emit(image_path)
-                
-                result = self.t2i_manager.t2i_generate_image(
-                    prompt=prompt,
-                    negative_prompt=neg_prompt,
-                    width=width,
-                    height=height,
-                    num_inference_steps=steps,
-                    num_images=num_images,
-                    seed=seed,
-                    console_callback=lambda msg: self.t2i_console_signal.emit(msg),
-                    progress_callback=progress_callback,
-                    image_generated_callback=image_generated_callback
-                )
-                return result
-            except Exception as e:
-                raise e
-        
-        worker = Worker(generate_task)
-        worker.signals.result.connect(self.t2i_on_generate_success)
-        worker.signals.error.connect(self.t2i_on_generate_error)
-        worker.signals.finished.connect(self.t2i_on_generate_finished)
-        
-        # 记录活跃工作线程
-        self.active_workers['t2i_generate'] = worker
-        self.thread_pool.start(worker)
-
-    def t2i_on_generate_success(self, result):
-        """图像生成成功回调"""
-        self.t2i_console_signal.emit("所有图像生成完成！\n")
-        # self.t2i_image_signal.emit(result) # 不再需要一次性更新
-
-    def t2i_on_generate_error(self, error_msg):
-        """图像生成错误回调"""
-        self.t2i_console_signal.emit(f"图像生成失败: {error_msg}\n")
-
-    def t2i_on_generate_finished(self):
-        """图像生成完成回调"""
-        self.active_workers.pop('t2i_generate', None)
-        self.t2i_generate_button.setEnabled(True)
-        self.t2i_generate_button.setText("生成图像")
-        # 重置生成状态 - 关键修复点2
-        self.t2i_is_generating = False
-        self.t2i_progress_line_start = -1
+        params = {
+            "prompt": prompt,
+            "negative_prompt": self.t2i_neg_prompt_input.toPlainText().strip(),
+            "num_inference_steps": self.t2i_steps_input.value(),
+            "seed": self.t2i_seed_input.value() if self.t2i_seed_input.value() >= 0 else None,
+            "width": self.t2i_width_input.value(),
+            "height": self.t2i_height_input.value(),
+            "num_images": self.t2i_num_images_input.value()
+        }
+        self.t2i_manager.t2i_generate_image(**params)
 
     def t2i_refresh_model_list(self):
-        """刷新文生图模型列表"""
-        # 重新获取可用模型
         self.t2i_available_models = self.ui_get_available_t2i_models()
-        
-        # 清空当前下拉框
         self.t2i_model_combo.clear()
-        
-        # 重新填充下拉框
         if self.t2i_available_models:
             self.t2i_model_combo.addItems(self.t2i_available_models)
             self.t2i_model_combo.setEnabled(True)
-            self.t2i_console_signal.emit(f"[T2I] 模型列表已刷新，找到 {len(self.t2i_available_models)} 个可用模型\n")
-            logging.info(f"[T2I] 刷新模型列表完成，可用模型: {self.t2i_available_models}")
         else:
-            self.t2i_model_combo.addItem("无可用模型")
-            self.t2i_model_combo.setEnabled(False)
-            self.t2i_console_signal.emit("[T2I] 未找到任何可用模型，请检查model文件夹\n")
-            logging.warning("[T2I] 刷新后未找到任何可用模型")
+            self.t2i_model_combo.addItem("无可用模型"); self.t2i_model_combo.setEnabled(False)
+        self.ui_update_t2i_console("[T2I] 模型列表已刷新\n")
 
     def ui_update_t2i_console(self, msg):
-        """优化的控制台更新，避免频繁刷新"""
-        # 检查是否是新图像生成的开始信号
-        if "--- 开始生成第" in msg:
-            self.t2i_progress_line_start = -1  # 重置进度条状态
-
-        # 对于进度条相关的消息，完全跳过频率限制
-        is_progress_msg = "进度:" in msg or "生成图像" in msg or "%" in msg or "====" in msg
-        
-        if not is_progress_msg:
-            import time
-            current_time = time.time() * 1000  # 转换为毫秒
-            
-            # 只对非进度消息限制更新频率
-            if current_time - self._last_ui_update < self._ui_update_interval:
-                return
-            
-            self._last_ui_update = current_time
-        
         self.t2i_console_display.append(msg)
-        
-        # 对于进度消息，立即滚动；其他消息延迟滚动
-        if is_progress_msg:
-            self.t2i_console_display.verticalScrollBar().setValue(
-                self.t2i_console_display.verticalScrollBar().maximum()
-            )
-        else:
-            # 使用延迟滚动，减少UI操作
-            if not hasattr(self, '_scroll_timer'):
-                self._scroll_timer = QTimer()
-                self._scroll_timer.setSingleShot(True)
-                self._scroll_timer.timeout.connect(lambda: 
-                    self.t2i_console_display.verticalScrollBar().setValue(
-                        self.t2i_console_display.verticalScrollBar().maximum()
-                    ))
-            self._scroll_timer.start(50)  # 进一步减少延迟
+        self.t2i_console_display.verticalScrollBar().setValue(self.t2i_console_display.verticalScrollBar().maximum())
 
-    def ui_update_t2i_state(self, model_loaded):
-        """更新文生图UI状态"""
+    def ui_update_t2i_state(self):
+        model_loaded = self.t2i_model_loaded
+        is_busy = self.t2i_is_busy
         self.t2i_load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
-        self.t2i_load_unload_button.setEnabled(True)  # 操作完成后启用按钮
-        self.t2i_generate_button.setEnabled(model_loaded)
+        self.t2i_load_unload_button.setEnabled(not is_busy)
+        if is_busy and not model_loaded: self.t2i_load_unload_button.setText("正在加载...")
+        if is_busy and model_loaded: self.t2i_load_unload_button.setText("正在操作...")
+        
+        self.t2i_generate_button.setEnabled(model_loaded and not is_busy)
 
     def ui_clear_t2i_preview(self):
-        """清空预览区域"""
         for i in reversed(range(self.t2i_preview_layout.count())):
             child = self.t2i_preview_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
+            if child: child.setParent(None)
 
     def ui_append_t2i_image(self, image_path):
-        """向预览区追加单张图片"""
         try:
             image_label = QLabel()
             pixmap = QPixmap(image_path)
             scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             image_label.setPixmap(scaled_pixmap)
-            image_label.setAlignment(Qt.AlignCenter)
             image_label.setToolTip(f"图像路径: {image_path}")
             self.t2i_preview_layout.addWidget(image_label)
         except Exception as e:
             logging.error(f"显示图像时出错: {str(e)}")
-            error_label = QLabel(f"图像显示失败: {os.path.basename(image_path)}")
-            error_label.setAlignment(Qt.AlignCenter)
-            self.t2i_preview_layout.addWidget(error_label)
 
-    def ui_update_t2i_images(self, image_paths):
-        """更新文生图预览区域显示（保留用于可能的批量更新场景）"""
-        self.ui_clear_t2i_preview()
-        for image_path in image_paths:
-            self.ui_append_t2i_image(image_path)
+    def ui_update_t2i_progress(self, current_step, total_steps, image_num, total_images):
+        if total_steps <= 0:
+            return
 
-    def ui_update_t2i_progress(self, current_step, total_steps, progress_bar_text):
-        """优化的进度更新，确保实时性和100%完成显示"""
-        # 直接计算百分比，确保准确性
-        if total_steps > 0:
-            # 确保current_step至少为1（因为通常从1开始计数）
-            actual_step = max(1, current_step + 1)  # +1 因为回调中的step通常是0-based
-            percentage = min(100, int((actual_step / total_steps) * 100))
+        # --- UI-side Progress Bar Construction ---
+        percentage = (current_step + 1) / total_steps
+        self.t2i_generate_button.setText(f"生成中({int(percentage * 100)}%)")
+
+        bar_length = 15
+        filled_length = int(bar_length * percentage)
+        bar = '█' * filled_length + ' ' * (bar_length - filled_length)
+        
+        bar_text = f"生成图像 {image_num}/{total_images}: {int(percentage * 100):3d}%|{bar}| {current_step + 1}/{total_steps}"
+
+        cursor = self.t2i_console_display.textCursor()
+
+        # Check if we are starting a new image's progress bar
+        if image_num != self.t2i_current_image_num:
+            self.t2i_current_image_num = image_num
+            # Add a newline for separation and append the new bar
+            self.t2i_console_display.append("")
+            self.t2i_console_display.append(bar_text)
         else:
-            percentage = 0
+            # We are updating the progress for the current image.
+            # Move cursor to the beginning of the last line
+            cursor.movePosition(QTextCursor.End)
+            cursor.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
+            # Select the entire line
+            cursor.movePosition(QTextCursor.EndOfLine, QTextCursor.KeepAnchor)
+            # Replace it with the new progress text
+            cursor.insertText(bar_text)
         
-        # 立即更新按钮文本
-        self.t2i_generate_button.setText(f"生成中({percentage}%)")
-        
-        # 存储当前进度信息
-        self.t2i_current_step = current_step
-        self.t2i_total_steps = total_steps
-        
-        # 简化的进度条显示
-        if self.t2i_progress_line_start == -1 and self.t2i_is_generating:
-            # 第一次显示进度条时，添加标题并记录位置
-            self.t2i_console_display.append("===== 生成进度 =====")
-            self.t2i_console_display.append("")  # 进度条占位行
-            # 记录进度条所在行号（最后一行）
-            self.t2i_progress_line_start = self.t2i_console_display.document().blockCount() - 1
-        
-        # 只在生成过程中更新进度条
-        if self.t2i_is_generating and self.t2i_progress_line_start != -1:
-            # 构建简洁的进度条文本
-            bar_length = 25
-            filled_length = int(bar_length * percentage / 100)
-            bar = '█' * filled_length + '░' * (bar_length - filled_length)
-            progress_text = f"进度: {percentage}% |{bar}| {actual_step}/{total_steps}"
-            
-            # 使用简单的方式更新进度行
-            try:
-                document = self.t2i_console_display.document()
-                block = document.findBlockByNumber(self.t2i_progress_line_start)
-                if block.isValid():
-                    cursor = self.t2i_console_display.textCursor()
-                    cursor.setPosition(block.position())
-                    cursor.setPosition(block.position() + block.length() - 1, cursor.KeepAnchor)
-                    cursor.insertText(progress_text)
-                    
-                    # 立即处理UI事件，确保及时显示
-                    QApplication.processEvents()
-            except Exception as e:
-                # 如果更新失败，直接追加新的进度信息
-                self.t2i_console_display.append(progress_text)
-                self.t2i_progress_line_start = self.t2i_console_display.document().blockCount() - 1
-        
-        # 确保最后一步显示100%
-        if actual_step >= total_steps and self.t2i_is_generating:
-            # 强制显示100%
-            final_bar = '█' * bar_length
-            final_text = f"进度: 100% |{final_bar}| {total_steps}/{total_steps}"
-            self.t2i_generate_button.setText("生成中(100%)")
-            
-            try:
-                document = self.t2i_console_display.document()
-                block = document.findBlockByNumber(self.t2i_progress_line_start)
-                if block.isValid():
-                    cursor = self.t2i_console_display.textCursor()
-                    cursor.setPosition(block.position())
-                    cursor.setPosition(block.position() + block.length() - 1, cursor.KeepAnchor)
-                    cursor.insertText(final_text)
-                    QApplication.processEvents()
-            except Exception:
-                pass
-            
-            # 添加完成消息
-            QTimer.singleShot(100, lambda: self.t2i_console_display.append("===== 生成完成 =====") if self.t2i_is_generating else None)
-
-    # 文生图相关方法
-    def t2i_unload_model_action(self):
-        """卸载文生图模型"""
-        self.t2i_load_unload_button.setEnabled(False)
-        self.t2i_load_unload_button.setText("正在卸载...")
-        
-        self.t2i_manager.t2i_unload_model(
-            lambda msg: self.t2i_console_signal.emit(msg)
-        )
-        
-        self.t2i_update_ui_signal.emit(False)
+        self.t2i_console_display.setTextCursor(cursor)
 
     def t2i_show_download_dialog(self):
-        """显示文生图模型下载对话框"""
         dialog = ModelDownloadDialog(T2I_MODEL_DICT, "文生图", self)
-        dialog.exec_()  # 使用exec_()显示模态对话框
-
-    def ui_console_callback(self, msg):
-        self.llm_console_signal.emit(msg)
-
-    def ui_chat_callback(self, msg):
-        self.llm_chat_signal.emit(msg)
-
-    def chat_callback(self, msg):
-        """为向后兼容保留的方法，实际调用新的方法"""
-        self.ui_chat_callback(msg)
-
-    def console_callback(self, msg):
-        """为向后兼容保留的方法，实际调用新的方法"""
-        self.ui_console_callback(msg)
-
-    def ui_close_event_handler(self, event):
-        """优化后的关闭事件处理"""
-        try:
-            # 取消所有进行中的操作
-            self.ui_cancel_all_operations()
-            
-            # 等待线程池完成
-            if not self.thread_pool.waitForDone(3000):  # 等待3秒
-                self.llm_console_signal.emit("强制终止未完成的线程...\n")
-            
-            # 卸载模型
-            if self.llm_manager.llm_pipe is not None:
-                self.ui_console_callback("卸载LLM模型...\n")
-                self.llm_manager.llm_unload_model(self.ui_console_callback)
-            
-            if self.t2i_manager.t2i_pipe is not None:
-                self.ui_console_callback("卸载文生图模型...\n") 
-                self.t2i_manager.t2i_unload_model(self.ui_console_callback)
-                
-            self.ui_console_callback("程序已安全退出\n")
-            event.accept()
-            
-        except Exception as e:
-            logging.error(f"关闭程序时出错: {str(e)}")
-            event.accept()
+        dialog.exec_()
 
     def closeEvent(self, event):
-        self.ui_close_event_handler(event)
+        self.llm_manager.stop_worker()
+        self.t2i_manager.stop_worker()
+        event.accept()
 
-    def ui_monitor_threads(self):
-        """监控线程状态"""
-        active_count = len(self.active_workers)
-        thread_pool_count = self.thread_pool.activeThreadCount()
+    def ui_get_available_llm_models(self):
+        """检查model文件夹下实际存在的LLM模型"""
+        available_models = []
+        model_dir = os.path.join(os.path.dirname(__file__), 'model')
+        if not os.path.exists(model_dir):
+            logging.warning(f"[LLM] 模型目录不存在: {model_dir}")
+            return available_models
         
-        # 可以在状态栏显示线程信息
-        status_text = f"活跃线程: {active_count} | 线程池: {thread_pool_count}"
-        # self.statusBar().showMessage(status_text)
-
-    def ui_cancel_all_operations(self):
-        """取消所有进行中的操作"""
-        if self.active_workers:
-            self.llm_console_signal.emit("正在取消所有操作...\n")
-            
-            # 清空线程池
-            self.thread_pool.clear()
-            
-            # 重置UI状态
-            self.llm_load_unload_button.setEnabled(True)
-            self.llm_load_unload_button.setText("加载模型")
-            self.t2i_generate_button.setEnabled(True)
-            self.t2i_generate_button.setText("生成图像")
-            
-            # 清空活跃工作线程记录
-            self.active_workers.clear()
-            
-            self.llm_console_signal.emit("所有操作已取消\n")
+        for model_name in LLM_MODEL_DICT.keys():
+            if os.path.isdir(os.path.join(model_dir, model_name)):
+                available_models.append(model_name)
+                logging.info(f"[LLM] 发现可用LLM模型: {model_name}")
+        
+        if not available_models:
+            logging.warning("[LLM] 未找到任何与配置匹配的可用LLM模型")
+        return available_models
     
-    def ui_check_system_resources(self):
-        """检查系统资源使用情况"""
-        import psutil
+    def ui_get_available_t2i_models(self):
+        """检查model文件夹下实际存在的T2I模型"""
+        available_models = []
+        model_dir = os.path.join(os.path.dirname(__file__), 'model')
+        if not os.path.exists(model_dir):
+            logging.warning(f"[T2I] 模型目录不存在: {model_dir}")
+            return available_models
+
+        for model_name in T2I_MODEL_DICT.keys():
+            if os.path.isdir(os.path.join(model_dir, model_name)):
+                available_models.append(model_name)
+                logging.info(f"[T2I] 发现可用T2I模型: {model_name}")
+
+        if not available_models:
+            logging.warning("[T2I] 未找到任何与配置匹配的可用T2I模型")
+        return available_models
+
+    def run_automated_test(self):
+        """自动化测试，用于验证tqdm进度条"""
+        logging.info("Starting automated test...")
+        # 1. 切换到T2I页面
+        self.stacked_widget.setCurrentIndex(1)
+        self.ui_update_t2i_console("自动化测试：已切换到文生图页面。\n")
+
+        # 2. 加载模型
+        self.t2i_load_model_action()
+        self.ui_update_t2i_console("自动化测试：正在加载T2I模型...\n")
+
+        # 3. 等待模型加载完成，然后生成图像
+        def check_t2i_model_loaded():
+            if self.t2i_model_loaded:
+                self.ui_update_t2i_console("自动化测试：T2I模型加载成功，开始生成图像。\n")
+                self.t2i_prompt_input.setPlainText("a beautiful cat")
+                self.t2i_num_images_input.setValue(3) # Set to generate 3 images
+                self.t2i_generate_image()
+            else:
+                # 如果模型仍在加载，则稍后再次检查
+                QTimer.singleShot(500, check_t2i_model_loaded)
         
-        # 检查内存使用
-        memory_percent = psutil.virtual_memory().percent
-        if memory_percent > 85:
-            self.llm_console_signal.emit(f"警告：内存使用率过高 ({memory_percent:.1f}%)\n")
-            return False
-        
-        # 检查CPU使用
-        cpu_percent = psutil.cpu_percent(interval=1)
-        if cpu_percent > 90:
-            self.llm_console_signal.emit(f"警告：CPU使用率过高 ({cpu_percent:.1f}%)\n")
-            return False
-        
-        return True
+        # 启动检查
+        QTimer.singleShot(1000, check_t2i_model_loaded)
