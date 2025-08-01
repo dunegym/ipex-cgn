@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QComboBox, QTextEdit, QLineEdit, QWidget, QStackedWidget, 
                              QSpinBox, QScrollArea, QDialog, QTableWidget, QTableWidgetItem, 
                              QHeaderView)
@@ -6,9 +6,8 @@ from PyQt5.QtCore import QTimer, Qt, QUrl
 from PyQt5.QtGui import QPixmap, QFont, QDesktopServices, QTextCursor
 import logging
 import os
+import yaml
 from queue import Empty
-from config import (LLM_MODEL_DICT, LLM_QUANTIZATION_LIST, LLM_DEVICE_LIST, 
-                    T2I_MODEL_DICT, T2I_QUANTIZATION_LIST)
 from manager import LLMChatManager, T2IManager
 
 class ModelDownloadDialog(QDialog):
@@ -63,6 +62,7 @@ class ModelDownloadDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.config = self.load_config()
         self.llm_manager = LLMChatManager()
         self.t2i_manager = T2IManager()
         self.llm_available_models = self.ui_get_available_llm_models()
@@ -127,10 +127,10 @@ class MainWindow(QMainWindow):
         else: self.llm_model_combo.addItem("无可用模型"); self.llm_model_combo.setEnabled(False)
         model_layout.addWidget(self.llm_model_combo)
         model_layout.addWidget(QLabel("量化精度:"))
-        self.llm_quant_combo = QComboBox(); self.llm_quant_combo.addItems(LLM_QUANTIZATION_LIST)
+        self.llm_quant_combo = QComboBox(); self.llm_quant_combo.addItems(self.config['LLM_QUANTIZATION_LIST'])
         model_layout.addWidget(self.llm_quant_combo)
         model_layout.addWidget(QLabel("选择设备:"))
-        self.llm_device_combo = QComboBox(); self.llm_device_combo.addItems(LLM_DEVICE_LIST)
+        self.llm_device_combo = QComboBox(); self.llm_device_combo.addItems(self.config['LLM_DEVICE_LIST'])
         model_layout.addWidget(self.llm_device_combo)
         layout.addLayout(model_layout)
         self.llm_chat_display = QTextEdit(); self.llm_chat_display.setReadOnly(True)
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
         else: self.t2i_model_combo.addItem("无可用模型"); self.t2i_model_combo.setEnabled(False)
         model_layout.addWidget(self.t2i_model_combo)
         model_layout.addWidget(QLabel("量化精度:"))
-        self.t2i_quant_combo = QComboBox(); self.t2i_quant_combo.addItems(T2I_QUANTIZATION_LIST)
+        self.t2i_quant_combo = QComboBox(); self.t2i_quant_combo.addItems(self.config['T2I_QUANTIZATION_LIST'])
         model_layout.addWidget(self.t2i_quant_combo)
         layout.addLayout(model_layout)
         prompt_layout = QVBoxLayout()
@@ -362,7 +362,7 @@ class MainWindow(QMainWindow):
         self.ui_update_llm_state()
 
     def llm_show_download_dialog(self):
-        dialog = ModelDownloadDialog(LLM_MODEL_DICT, "文生文", self)
+        dialog = ModelDownloadDialog(self.config['LLM_MODEL_DICT'], "文生文", self)
         dialog.exec_()
 
     def t2i_toggle_model(self):
@@ -482,8 +482,23 @@ class MainWindow(QMainWindow):
         self.t2i_console_display.setTextCursor(cursor)
 
     def t2i_show_download_dialog(self):
-        dialog = ModelDownloadDialog(T2I_MODEL_DICT, "文生图", self)
+        dialog = ModelDownloadDialog(self.config['T2I_MODEL_DICT'], "文生图", self)
         dialog.exec_()
+
+    def load_config(self):
+        """加载YAML配置文件"""
+        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                logging.info("YAML配置文件加载成功")
+                return config
+        except FileNotFoundError:
+            logging.error(f"错误：找不到配置文件 config.yaml")
+            return None
+        except yaml.YAMLError as e:
+            logging.error(f"解析config.yaml时出错: {e}")
+            return None
 
     def closeEvent(self, event):
         self.llm_manager.stop_worker()
@@ -498,7 +513,7 @@ class MainWindow(QMainWindow):
             logging.warning(f"[LLM] 模型目录不存在: {model_dir}")
             return available_models
         
-        for model_name in LLM_MODEL_DICT.keys():
+        for model_name in self.config['LLM_MODEL_DICT'].keys():
             if os.path.isdir(os.path.join(model_dir, model_name)):
                 available_models.append(model_name)
                 logging.info(f"[LLM] 发现可用LLM模型: {model_name}")
@@ -515,7 +530,7 @@ class MainWindow(QMainWindow):
             logging.warning(f"[T2I] 模型目录不存在: {model_dir}")
             return available_models
 
-        for model_name in T2I_MODEL_DICT.keys():
+        for model_name in self.config['T2I_MODEL_DICT'].keys():
             if os.path.isdir(os.path.join(model_dir, model_name)):
                 available_models.append(model_name)
                 logging.info(f"[T2I] 发现可用T2I模型: {model_name}")

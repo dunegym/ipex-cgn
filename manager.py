@@ -1,13 +1,5 @@
-import os
-import time
 import logging
 from transformers import AutoTokenizer
-import openvino_genai as ov_genai
-import random
-from config import LLM_QUANTIZATION_LIST
-from PIL import Image
-import tqdm
-import sys
 import multiprocessing as mp
 from process_worker import llm_worker_process, t2i_worker_process
 
