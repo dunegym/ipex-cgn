@@ -9,6 +9,10 @@ import os
 import random
 import traceback
 
+# --- Absolute Path Setup ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
+
 # --- Worker Process Core Logic ---
 
 class LLMWorker:
@@ -24,7 +28,7 @@ class LLMWorker:
         """加载LLM模型"""
         self.model_name = model_name
         self.quant = quant
-        model_dir = f"model/{model_name}/{quant}"
+        model_dir = os.path.join(project_root, "model", model_name, quant)
         logging.info(f"Worker: Loading LLM model {model_dir} on {self.device}")
         try:
             output_queue.put({'status': 'progress', 'data': 'Loading LLM model......\n'})
@@ -103,7 +107,7 @@ class T2IWorker:
         self.model_name = None
         self.quant = None
         self.config = {
-            "HETERO_CONFIG_FILE": os.path.join(os.getcwd(), "hetero_config.xml"),
+            "HETERO_CONFIG_FILE": os.path.join(project_root, "config", "hetero_config.xml"),
             "PERFORMANCE_HINT": "THROUGHPUT"
         }
 
@@ -111,7 +115,7 @@ class T2IWorker:
         """加载T2I模型"""
         self.model_name = model_name
         self.quant = quant
-        model_dir = f"model/{model_name}/{quant}"
+        model_dir = os.path.join(project_root, "model", model_name, quant)
         logging.info(f"Worker: Loading T2I model {model_dir}")
         try:
             output_queue.put({'status': 'progress', 'data': 'Loading T2I model......\n'})
@@ -145,7 +149,7 @@ class T2IWorker:
             output_queue.put({'status': 'error', 'message': 'T2I model not loaded.'})
             return
 
-        output_dir = os.path.join(os.getcwd(), 'pictures')
+        output_dir = os.path.join(project_root, 'pictures')
         os.makedirs(output_dir, exist_ok=True)
 
         num_images = params.get('num_images', 1)

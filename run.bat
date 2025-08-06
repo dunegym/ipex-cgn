@@ -18,7 +18,7 @@ cd /d %~dp0
 echo 当前目录: %cd%
 echo.
 echo [步骤3] 启动主程序
-python main.py
+python src/main.py
 echo.
 echo 程序已退出，按任意键关闭窗口...
 pause

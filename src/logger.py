@@ -2,13 +2,17 @@ import os
 import logging
 import datetime
 
+# --- Absolute Path Setup ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
+
 def setup_logger():
     """
     初始化日志记录器，创建日志文件并配置日志格式
     :return: 日志文件路径
     """
     # 创建logs目录（如果不存在）
-    log_dir = "logs"
+    log_dir = os.path.join(project_root, "logs")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     

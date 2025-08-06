@@ -2,6 +2,11 @@ import logging
 from transformers import AutoTokenizer
 import multiprocessing as mp
 from process_worker import llm_worker_process, t2i_worker_process
+import os
+
+# --- Absolute Path Setup ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
 
 class LLMChatManager:
     """管理LLM聊天功能的类，通过多进程负责模型加载、卸载、聊天历史管理等"""
@@ -54,7 +59,7 @@ class LLMChatManager:
         self.stop_worker() # Stop any existing worker
         self.start_worker(device) # Start a new one with the correct device
 
-        model_dir = f"model/{model_name}/{quant}"
+        model_dir = os.path.join(project_root, "model", model_name, quant)
         try:
             # Tokenizer可以在主进程中预加载，因为它通常很快
             self.llm_tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True, trust_remote_code=True)

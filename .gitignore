@@ -1,0 +1,8 @@
+# Log files
+logs/
+
+# Model files
+model/
+
+# Generated pictures
+pictures/

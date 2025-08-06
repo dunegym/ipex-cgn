@@ -10,6 +10,10 @@ import yaml
 from queue import Empty
 from manager import LLMChatManager, T2IManager
 
+# --- Absolute Path Setup ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
+
 class ModelDownloadDialog(QDialog):
     """模型下载信息对话框"""
     def __init__(self, model_dict, model_type, parent=None):
@@ -487,7 +491,7 @@ class MainWindow(QMainWindow):
 
     def load_config(self):
         """加载YAML配置文件"""
-        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+        config_path = os.path.join(project_root, 'config', 'config.yaml')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
@@ -508,7 +512,7 @@ class MainWindow(QMainWindow):
     def ui_get_available_llm_models(self):
         """检查model文件夹下实际存在的LLM模型"""
         available_models = []
-        model_dir = os.path.join(os.path.dirname(__file__), 'model')
+        model_dir = os.path.join(project_root, 'model')
         if not os.path.exists(model_dir):
             logging.warning(f"[LLM] 模型目录不存在: {model_dir}")
             return available_models
@@ -525,7 +529,7 @@ class MainWindow(QMainWindow):
     def ui_get_available_t2i_models(self):
         """检查model文件夹下实际存在的T2I模型"""
         available_models = []
-        model_dir = os.path.join(os.path.dirname(__file__), 'model')
+        model_dir = os.path.join(project_root, 'model')
         if not os.path.exists(model_dir):
             logging.warning(f"[T2I] 模型目录不存在: {model_dir}")
             return available_models
