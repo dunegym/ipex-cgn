@@ -6,3 +6,7 @@ model/
 
 # Generated pictures
 pictures/
+
+# Python cache
+__pycache__/
+*.pyc
