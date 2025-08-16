@@ -8,7 +8,9 @@ import logging
 import os
 import yaml
 from queue import Empty
-from manager import LLMChatManager, T2IManager
+from llm_manager import LLMChatManager
+from t2i_manager import T2IManager
+from vlm_manager import VLMManager
 
 # --- Absolute Path Setup ---
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -69,15 +71,20 @@ class MainWindow(QMainWindow):
         self.config = self.load_config()
         self.llm_manager = LLMChatManager()
         self.t2i_manager = T2IManager()
+        self.vlm_manager = VLMManager()
         self.llm_available_models = self.ui_get_available_llm_models()
         self.t2i_available_models = self.ui_get_available_t2i_models()
+        self.vlm_available_models = self.ui_get_available_vlm_models()
 
         # 状态标志
         self.llm_model_loaded = False
         self.t2i_model_loaded = False
+        self.vlm_model_loaded = False
         self.llm_is_busy = False
         self.t2i_is_busy = False
+        self.vlm_is_busy = False
         self.t2i_current_image_num = 0
+        self.vlm_selected_image_path = None
         
         self.ui_init()
 
@@ -109,7 +116,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.stacked_widget)
         self.text_to_text_page = self.ui_create_llm_page()
         self.text_to_image_page = self.ui_create_t2i_page()
-        self.image_to_text_page = self.ui_create_placeholder_page("图生文功能开发中...")
+        self.image_to_text_page = self.ui_create_vlm_page()
         self.speech_rec_page = self.ui_create_placeholder_page("语音识别功能开发中...")
         self.stacked_widget.addWidget(self.text_to_text_page)
         self.stacked_widget.addWidget(self.text_to_image_page)
@@ -185,7 +192,7 @@ class MainWindow(QMainWindow):
         params_layout.addWidget(QLabel("种子:")); self.t2i_seed_input = QSpinBox(); self.t2i_seed_input.setRange(-1, 999999); self.t2i_seed_input.setValue(-1); self.t2i_seed_input.setSpecialValueText("随机"); params_layout.addWidget(self.t2i_seed_input)
         params_layout.addWidget(QLabel("宽度:")); self.t2i_width_input = QSpinBox(); self.t2i_width_input.setRange(256, 512); self.t2i_width_input.setValue(512); self.t2i_width_input.setSingleStep(8); params_layout.addWidget(self.t2i_width_input)
         params_layout.addWidget(QLabel("高度:")); self.t2i_height_input = QSpinBox(); self.t2i_height_input.setRange(256, 512); self.t2i_height_input.setValue(512); self.t2i_height_input.setSingleStep(8); params_layout.addWidget(self.t2i_height_input)
-        params_layout.addWidget(QLabel("生图数量:")); self.t2i_num_images_input = QSpinBox(); self.t2i_num_images_input.setRange(1, 100); self.t2i_num_images_input.setValue(1); params_layout.addWidget(self.t2i_num_images_input)
+        params_layout.addWidget(QLabel("生图数量:")); self.t2i_num_images_input = QSpinBox(); self.t2i_num_images_input.setRange(1, 20); self.t2i_num_images_input.setValue(1); params_layout.addWidget(self.t2i_num_images_input)
         layout.addLayout(params_layout)
         btn_layout = QHBoxLayout()
         self.t2i_load_unload_button = QPushButton("加载模型"); self.t2i_load_unload_button.clicked.connect(self.t2i_toggle_model)
@@ -219,6 +226,100 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
         return page_widget
 
+    def ui_create_vlm_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        # 模型选择区域
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("选择模型:"))
+        self.vlm_model_combo = QComboBox()
+        if self.vlm_available_models: 
+            self.vlm_model_combo.addItems(self.vlm_available_models)
+        else: 
+            self.vlm_model_combo.addItem("无可用模型")
+            self.vlm_model_combo.setEnabled(False)
+        model_layout.addWidget(self.vlm_model_combo)
+        
+        model_layout.addWidget(QLabel("量化精度:"))
+        self.vlm_quant_combo = QComboBox()
+        self.vlm_quant_combo.addItems(self.config['VLM_QUANTIZATION_LIST'])
+        model_layout.addWidget(self.vlm_quant_combo)
+        
+        model_layout.addWidget(QLabel("选择设备:"))
+        self.vlm_device_combo = QComboBox()
+        self.vlm_device_combo.addItems(self.config['VLM_DEVICE_LIST'])
+        model_layout.addWidget(self.vlm_device_combo)
+        
+        layout.addLayout(model_layout)
+        
+        # 图像选择和显示区域
+        image_layout = QHBoxLayout()
+        
+        # 左侧：图像选择和预览
+        left_layout = QVBoxLayout()
+        self.vlm_select_image_button = QPushButton("选择图像")
+        self.vlm_select_image_button.clicked.connect(self.vlm_select_image)
+        left_layout.addWidget(self.vlm_select_image_button)
+        
+        self.vlm_image_preview = QLabel("未选择图像")
+        self.vlm_image_preview.setAlignment(Qt.AlignCenter)
+        self.vlm_image_preview.setMinimumSize(300, 300)
+        self.vlm_image_preview.setStyleSheet("border: 1px solid gray;")
+        left_layout.addWidget(self.vlm_image_preview)
+        
+        image_layout.addLayout(left_layout)
+        
+        # 右侧：结果显示
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel("图像描述:"))
+        self.vlm_result_display = QTextEdit()
+        self.vlm_result_display.setReadOnly(True)
+        right_layout.addWidget(self.vlm_result_display)
+        
+        image_layout.addLayout(right_layout)
+        
+        layout.addLayout(image_layout)
+        
+        # 提示词输入区域
+        prompt_layout = QVBoxLayout()
+        prompt_layout.addWidget(QLabel("提示词:"))
+        self.vlm_prompt_input = QTextEdit()
+        self.vlm_prompt_input.setMaximumHeight(80)
+        self.vlm_prompt_input.setPlaceholderText("请输入用于图像描述的提示词，例如：请描述这张图像的内容")
+        prompt_layout.addWidget(self.vlm_prompt_input)
+        layout.addLayout(prompt_layout)
+        
+        # 控制按钮
+        btn_layout = QHBoxLayout()
+        self.vlm_load_unload_button = QPushButton("加载模型")
+        self.vlm_load_unload_button.clicked.connect(self.vlm_toggle_model)
+        btn_layout.addWidget(self.vlm_load_unload_button)
+        
+        self.vlm_generate_button = QPushButton("生成描述")
+        self.vlm_generate_button.clicked.connect(self.vlm_generate_description)
+        self.vlm_generate_button.setEnabled(False)
+        btn_layout.addWidget(self.vlm_generate_button)
+        
+        self.vlm_refresh_button = QPushButton("刷新模型")
+        self.vlm_refresh_button.clicked.connect(self.vlm_refresh_model_list)
+        btn_layout.addWidget(self.vlm_refresh_button)
+        
+        self.vlm_download_button = QPushButton("下载模型")
+        self.vlm_download_button.clicked.connect(self.vlm_show_download_dialog)
+        btn_layout.addWidget(self.vlm_download_button)
+        
+        layout.addLayout(btn_layout)
+        
+        # 控制台
+        layout.addWidget(QLabel("控制台:"))
+        self.vlm_console_display = QTextEdit()
+        self.vlm_console_display.setReadOnly(True)
+        self.vlm_console_display.setStyleSheet("background-color: lightgray;")
+        layout.addWidget(self.vlm_console_display)
+        
+        return page
+
     def process_queues(self):
         # 处理LLM队列
         if self.llm_manager.llm_output_queue:
@@ -235,6 +336,15 @@ class MainWindow(QMainWindow):
                 try:
                     msg = self.t2i_manager.t2i_output_queue.get_nowait()
                     self.handle_t2i_message(msg)
+                except Empty:
+                    break
+        
+        # 处理VLM队列
+        if self.vlm_manager.vlm_output_queue:
+            while not self.vlm_manager.vlm_output_queue.empty():
+                try:
+                    msg = self.vlm_manager.vlm_output_queue.get_nowait()
+                    self.handle_vlm_message(msg)
                 except Empty:
                     break
 
@@ -294,6 +404,45 @@ class MainWindow(QMainWindow):
             self.t2i_is_busy = False
             self.ui_update_t2i_state()
             self.ui_update_t2i_console(f"T2I错误: {msg.get('message', '未知错误')}\n")
+
+    def handle_vlm_message(self, msg):
+        status = msg.get('status')
+        if status == 'progress':
+            self.ui_update_vlm_console(msg.get('data', ''))
+        elif status == 'load_success':
+            self.vlm_model_loaded = True
+            self.vlm_is_busy = False
+            self.ui_update_vlm_state()
+            self.ui_update_vlm_console(f"VLM模型加载成功！耗时：{msg.get('load_time', 0):.2f} 秒\n\n")
+        elif status == 'unload_success':
+            self.vlm_model_loaded = False
+            self.vlm_is_busy = False
+            self.ui_update_vlm_state()
+            self.ui_update_vlm_console("VLM模型已成功卸载！\n\n")
+        elif status == 'image_description':
+            # 追加文本到结果显示框
+            current_text = self.vlm_result_display.toPlainText()
+            new_text = msg.get('data', '')
+            self.vlm_result_display.setPlainText(current_text + new_text)
+            # 自动滚动到末尾
+            self.vlm_result_display.verticalScrollBar().setValue(self.vlm_result_display.verticalScrollBar().maximum())
+        elif status == 'generate_success':
+            self.vlm_is_busy = False
+            self.ui_update_vlm_state()
+            # 显示生成的图像描述
+            description_text = msg.get('text', '')
+            self.vlm_result_display.setPlainText(description_text)
+            # 自动滚动到末尾
+            self.vlm_result_display.verticalScrollBar().setValue(self.vlm_result_display.verticalScrollBar().maximum())
+            generation_time = msg.get('generation_time', 'N/A')
+            if isinstance(generation_time, float):
+                self.ui_update_vlm_console(f"VLM生成完成，耗时: {generation_time:.2f} 秒\n")
+            else:
+                self.ui_update_vlm_console(f"VLM生成完成\n")
+        elif status == 'error':
+            self.vlm_is_busy = False
+            self.ui_update_vlm_state()
+            self.ui_update_vlm_console(f"VLM错误: {msg.get('message', '未知错误')}\n")
 
     def llm_toggle_model(self):
         if self.llm_is_busy: return
@@ -381,6 +530,7 @@ class MainWindow(QMainWindow):
         self.ui_update_t2i_state()
         selected_model = self.t2i_model_combo.currentText()
         selected_quant = self.t2i_quant_combo.currentText()
+        # T2I worker hardcodes device to "HETERO:GPU,CPU", so we don't pass device parameter
         self.t2i_manager.t2i_load_model(selected_model, selected_quant)
 
     def t2i_unload_model_action(self):
@@ -403,11 +553,11 @@ class MainWindow(QMainWindow):
         params = {
             "prompt": prompt,
             "negative_prompt": self.t2i_neg_prompt_input.toPlainText().strip(),
-            "num_inference_steps": self.t2i_steps_input.value(),
+            "steps": self.t2i_steps_input.value(),
             "seed": self.t2i_seed_input.value() if self.t2i_seed_input.value() >= 0 else None,
             "width": self.t2i_width_input.value(),
             "height": self.t2i_height_input.value(),
-            "num_images": self.t2i_num_images_input.value()
+            "num_images_per_prompt": self.t2i_num_images_input.value()
         }
         self.t2i_manager.t2i_generate_image(**params)
 
@@ -424,6 +574,46 @@ class MainWindow(QMainWindow):
     def ui_update_t2i_console(self, msg):
         self.t2i_console_display.append(msg)
         self.t2i_console_display.verticalScrollBar().setValue(self.t2i_console_display.verticalScrollBar().maximum())
+
+    def ui_update_vlm_console(self, msg):
+        self.vlm_console_display.append(msg)
+        self.vlm_console_display.verticalScrollBar().setValue(self.vlm_console_display.verticalScrollBar().maximum())
+
+    def ui_update_vlm_state(self):
+        model_loaded = self.vlm_model_loaded
+        is_busy = self.vlm_is_busy
+        self.vlm_load_unload_button.setText("卸载模型" if model_loaded else "加载模型")
+        self.vlm_load_unload_button.setEnabled(not is_busy)
+        if is_busy and not model_loaded: self.vlm_load_unload_button.setText("正在加载...")
+        if is_busy and model_loaded: self.vlm_load_unload_button.setText("正在操作...")
+        
+        self.vlm_generate_button.setEnabled(model_loaded and not is_busy)
+
+    def vlm_select_image(self):
+        from PyQt5.QtWidgets import QFileDialog
+        file_name, _ = QFileDialog.getOpenFileName(self, "选择图像", "", "图像文件 (*.png *.jpg *.jpeg *.bmp *.gif)")
+        if file_name:
+            self.vlm_selected_image_path = file_name
+            pixmap = QPixmap(file_name)
+            scaled_pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.vlm_image_preview.setPixmap(scaled_pixmap)
+            self.vlm_image_preview.setText("")
+            self.ui_update_vlm_console(f"已选择图像: {file_name}\n")
+
+    def vlm_refresh_model_list(self):
+        self.vlm_available_models = self.ui_get_available_vlm_models()
+        self.vlm_model_combo.clear()
+        if self.vlm_available_models:
+            self.vlm_model_combo.addItems(self.vlm_available_models)
+            self.vlm_model_combo.setEnabled(True)
+        else:
+            self.vlm_model_combo.addItem("无可用模型")
+            self.vlm_model_combo.setEnabled(False)
+        self.ui_update_vlm_console("[VLM] 模型列表已刷新\n")
+
+    def vlm_show_download_dialog(self):
+        dialog = ModelDownloadDialog(self.config['VLM_MODEL_DICT'], "图生文", self)
+        dialog.exec_()
 
     def ui_update_t2i_state(self):
         model_loaded = self.t2i_model_loaded
@@ -489,6 +679,42 @@ class MainWindow(QMainWindow):
         dialog = ModelDownloadDialog(self.config['T2I_MODEL_DICT'], "文生图", self)
         dialog.exec_()
 
+    def vlm_toggle_model(self):
+        if self.vlm_is_busy: return
+        if not self.vlm_model_loaded:
+            self.vlm_load_model_action()
+        else:
+            self.vlm_unload_model_action()
+
+    def vlm_load_model_action(self):
+        self.vlm_is_busy = True
+        self.ui_update_vlm_state()
+        selected_model = self.vlm_model_combo.currentText()
+        selected_quant = self.vlm_quant_combo.currentText()
+        selected_device = self.vlm_device_combo.currentText()
+        self.vlm_manager.vlm_load_model(selected_model, selected_quant, selected_device)
+
+    def vlm_unload_model_action(self):
+        self.vlm_is_busy = True
+        self.ui_update_vlm_state()
+        self.vlm_manager.vlm_unload_model()
+
+    def vlm_generate_description(self):
+        if self.vlm_is_busy or not self.vlm_model_loaded: return
+        if not hasattr(self, 'vlm_selected_image_path'):
+            self.ui_update_vlm_console("请先选择图像\n")
+            return
+            
+        self.vlm_is_busy = True
+        self.ui_update_vlm_state()
+        self.vlm_result_display.clear()
+        
+        # 从输入框获取提示词，如果为空则使用默认提示词
+        prompt_text = self.vlm_prompt_input.toPlainText().strip()
+        if not prompt_text:
+            prompt_text = "请描述这张图像的内容"
+        self.vlm_manager.vlm_generate_description(self.vlm_selected_image_path, prompt_text)
+
     def load_config(self):
         """加载YAML配置文件"""
         config_path = os.path.join(project_root, 'config', 'config.yaml')
@@ -507,6 +733,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.llm_manager.stop_worker()
         self.t2i_manager.stop_worker()
+        self.vlm_manager.stop_worker()
         event.accept()
 
     def ui_get_available_llm_models(self):
@@ -541,6 +768,23 @@ class MainWindow(QMainWindow):
 
         if not available_models:
             logging.warning("[T2I] 未找到任何与配置匹配的可用T2I模型")
+        return available_models
+
+    def ui_get_available_vlm_models(self):
+        """检查model文件夹下实际存在的VLM模型"""
+        available_models = []
+        model_dir = os.path.join(project_root, 'model')
+        if not os.path.exists(model_dir):
+            logging.warning(f"[VLM] 模型目录不存在: {model_dir}")
+            return available_models
+
+        for model_name in self.config['VLM_MODEL_DICT'].keys():
+            if os.path.isdir(os.path.join(model_dir, model_name)):
+                available_models.append(model_name)
+                logging.info(f"[VLM] 发现可用VLM模型: {model_name}")
+
+        if not available_models:
+            logging.warning("[VLM] 未找到任何与配置匹配的可用VLM模型")
         return available_models
 
     def run_automated_test(self):

@@ -15,8 +15,20 @@ LLM_DEVICE_LIST:
 T2I_MODEL_DICT:
   dreamlike-anime: 'https://pan.xunlei.com/s/VOVh__wSi9g4VMDQ4xA575RkA1?pwd=3rif#'
   dreamlike-photoreal: 'https://pan.xunlei.com/s/VOVh_ozxL8qAx5s7vkZGk3i0A1?pwd=6qcw#'
-  dreamlike-diffusion: 'https://pan.xunlei.com/s/VOVh_xz5uv86aEgbYNzS8Yr-A1?pwd=b5bf#'
+  # dreamlike-diffusion: 'https://pan.xunlei.com/s/VOVh_xz5uv86aEgbYNzS8Yr-A1?pwd=b5bf#'
 
 T2I_QUANTIZATION_LIST:
   - 'fp16'
   - 'int8'
+
+VLM_MODEL_DICT:
+  Qwen2.5-VL-3B: 'https://pan.xunlei.com/s/VOXlZtv0y-6A2bPiWO5YdqgmA1?pwd=dwwb#'
+  Qwen2.5-VL-7B: 'https://pan.xunlei.com/s/VOXl_7YfzD55tM1ZZko_p8AqA1?pwd=9w3y#'
+
+VLM_QUANTIZATION_LIST:
+  - 'int8'
+  - 'int4'
+
+VLM_DEVICE_LIST:
+  - 'CPU'
+  - 'GPU'

@@ -6,7 +6,6 @@ import multiprocessing
 # 导入自定义模块
 from logger import setup_logger
 from ui import MainWindow
-
 # 主程序入口
 if __name__ == "__main__":
     multiprocessing.freeze_support()
