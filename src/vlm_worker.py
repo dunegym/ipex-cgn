@@ -74,12 +74,28 @@ class VLMWorker:
             output_queue.put({'status': 'progress', 'data': "开始生成图像描述...\n"})
             start_time = time.time()
             
+            # 定义一个streamer，它将token发送到输出队列
+            class QueueStreamer:
+                def __init__(self, queue):
+                    self.queue = queue
+                def __call__(self, token_text: str):
+                    self.queue.put({'status': 'vlm_chunk', 'data': token_text})
+                    return False # 返回False以继续生成
+                def end(self):
+                    self.queue.put({'status': 'vlm_done'})
+
+            streamer = QueueStreamer(output_queue)
+            
             # 生成描述
             result = self.pipe.generate(
                 prompt,
                 image=image_tensor,
-                max_new_tokens=max_new_tokens
+                max_new_tokens=max_new_tokens,
+                streamer=streamer
             )
+            
+            # 确保在生成结束后发送完成信号
+            streamer.end()
             
             generation_time = time.time() - start_time
             

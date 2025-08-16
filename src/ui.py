@@ -419,6 +419,19 @@ class MainWindow(QMainWindow):
             self.vlm_is_busy = False
             self.ui_update_vlm_state()
             self.ui_update_vlm_console("VLM模型已成功卸载！\n\n")
+        elif status == 'vlm_chunk':
+            # 追加文本到结果显示框
+            current_text = self.vlm_result_display.toPlainText()
+            new_text = msg.get('data', '')
+            self.vlm_result_display.setPlainText(current_text + new_text)
+            # 自动滚动到末尾
+            self.vlm_result_display.verticalScrollBar().setValue(self.vlm_result_display.verticalScrollBar().maximum())
+        elif status == 'vlm_done':
+            self.vlm_is_busy = False
+            self.ui_update_vlm_state()
+            # 自动滚动到末尾
+            self.vlm_result_display.verticalScrollBar().setValue(self.vlm_result_display.verticalScrollBar().maximum())
+            self.ui_update_vlm_console("VLM生成完成\n")
         elif status == 'image_description':
             # 追加文本到结果显示框
             current_text = self.vlm_result_display.toPlainText()
