@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ovtool"
+version = "0.1.0"
+description = "Comprehensive OpenVINO GenAI command-line tool: LLM/VLM inference, image generation, model conversion and quantization"
+requires-python = ">=3.10"
+dependencies = [
+    "openvino>=2025.3",
+    "openvino-genai>=2025.3",
+    "openvino-tokenizers>=2025.3",
+    "numpy",
+    "pillow",
+    "huggingface_hub",
+    "sentencepiece",
+    "tiktoken",
+]
+
+[project.optional-dependencies]
+convert = ["optimum-intel[openvino]>=1.20", "onnx", "diffusers", "transformers"]
+
+[project.scripts]
+ovtool = "ovtool.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ovtool*"]

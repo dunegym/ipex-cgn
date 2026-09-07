@@ -1,0 +1,10 @@
+# models are managed in their own repo: huggingface.co/dunegym/openvino-models
+models/
+generated/
+out/
+.video_agent/
+.mimosa/
+ovtool.egg-info/
+__pycache__/
+*.pyc
+*.log
