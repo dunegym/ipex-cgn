@@ -23,6 +23,13 @@ models:
       int4-asym-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int4 --weight-format int4"
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int8 --weight-format int8"
+        note: ~10% faster than int4 on iGPU, 1.5x larger
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-fp16 --weight-format fp16"
 
   - id: Qwen/Qwen3-0.6B
     kind: llm
@@ -35,6 +42,16 @@ models:
         devices: [CPU, GPU, NPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-int4-sym --weight-format int4 --sym"
         note: NPU-ready (symmetric INT4)
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-awq --weight-format int4 --awq"
+        note: ~40% faster than plain int4 on iGPU (78 vs 55 tok/s)
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-fp16 --weight-format fp16"
 
   - id: Qwen/Qwen3.5-0.8B
     kind: vlm
@@ -72,6 +89,10 @@ models:
       int8:
         devices: [GPU, CPU, AUTO]
         convert: "ovtool convert image stabilityai/sd-turbo -o ./sd-turbo-int8 --weight-format int8"
+      int4-g64:
+        devices: [GPU, CPU, AUTO]
+        convert: "ovtool convert image stabilityai/sd-turbo -o ./sd-turbo-int4 --weight-format int4 --group-size 64"
+        note: group 64 required — UNet channel size 320 is not divisible by 128
 
 # global rules, evaluated for every matched entry
 global_rules:

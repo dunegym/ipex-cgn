@@ -36,12 +36,18 @@ def normalize_device(device: str) -> str:
 def detect_quant(model_str: str) -> str:
     import re
     tokens = re.split(r"[\\/_\-. ]", model_str.lower())
+    if "fp16" in tokens or "fp16" in model_str.lower():
+        return "fp16"
     if "int8" in tokens or "int8" in model_str.lower():
         return "int8"
+    if "awq" in tokens:
+        return "int4-awq-g128"
     if "asym" in tokens:  # must be tested before "sym" ("asym" contains "sym")
         return "int4-asym-g128"
     if "sym" in tokens:
         return "int4-sym-g128"
+    if "g64" in tokens:
+        return "int4-g64"
     return "int4-asym-g128"
 
 

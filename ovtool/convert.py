@@ -96,7 +96,7 @@ def _build_quant_cfg(args: argparse.Namespace):
     kwargs = dict(bits=4, sym=sym, group_size=group_size,
                   ratio=args.ratio if args.ratio is not None else 1.0)
     if args.awq:
-        kwargs.update(awq=True, awq_scale=True,
+        kwargs.update(quant_method="awq",
                       dataset=args.dataset or "wikitext2")
     elif args.dataset:
         kwargs.update(dataset=args.dataset)
