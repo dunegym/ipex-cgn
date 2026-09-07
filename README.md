@@ -1,97 +1,97 @@
-# ovtool — 综合性 OpenVINO 命令行工具
+# ovtool — A Comprehensive OpenVINO Command-Line Tool
 
-基于 [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai) 的多功能推理命令行工具，支持：
+A multi-purpose inference CLI built on [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai), supporting:
 
-- **大语言模型（LLM）推理**：单轮生成 + 多轮交互聊天，流式输出，完整采样参数
-- **多模态（VLM）推理**：图像 + 文本问答（LLaVA / Qwen-VL / MiniCPM-V / InternVL 等转换后模型）
-- **图像生成**：文生图（Text2Image）与图生图（Image2Image），支持 SD / SDXL / Flux 系列
-- **设备选择与运行时参数**：CPU / GPU / NPU / AUTO / HETERO，透传 OpenVINO 运行时选项
-- **模型转换与量化**：Hugging Face 模型一键导出 OpenVINO IR，支持 INT8 / INT4 权重压缩（含 AWQ）
+- **LLM inference**: one-shot generation + interactive multi-turn chat, streaming output, full sampling controls
+- **Multimodal (VLM) inference**: image + text Q&A (converted LLaVA / Qwen-VL / MiniCPM-V / InternVL models)
+- **Image generation**: Text2Image and Image2Image with the SD / SDXL / Flux families
+- **Device selection & runtime options**: CPU / GPU / NPU / AUTO / HETERO, with pass-through OpenVINO runtime properties
+- **Model conversion & quantization**: one-command export of Hugging Face models to OpenVINO IR with INT8 / INT4 weight compression (AWQ supported)
 
-## 环境
+## Setup
 
 ```bash
 conda create -n openvino-cli python=3.11 -y -c conda-forge --override-channels
 conda activate openvino-cli
-pip install -e .            # 推理所需（openvino / openvino-genai / openvino-tokenizers）
-pip install "optimum-intel[openvino]" onnx   # 转换/量化所需（或 pip install -e ".[convert]"）
+pip install -e .            # inference deps (openvino / openvino-genai / openvino-tokenizers)
+pip install "optimum-intel[openvino]" onnx   # conversion/quantization deps (or pip install -e ".[convert]")
 ```
 
-安装后命令入口为 `ovtool`（等价于 `python -m ovtool.cli`）。
+After installation the command entry point is `ovtool` (equivalent to `python -m ovtool.cli`).
 
-## 快速上手
+## Quick Start
 
 ```bash
-# 1. 查看可用推理设备
+# 1. List available inference devices
 ovtool devices
 
-# 2. 转换 + INT4 量化一个 LLM（下载自 Hugging Face）
+# 2. Convert + INT4-quantize an LLM (downloaded from Hugging Face)
 ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -m ./qwen05-int4
 
-# 3. 单轮生成
-ovtool generate -m ./qwen05-int4 -d CPU "用一句话介绍 OpenVINO"
+# 3. One-shot generation
+ovtool generate -m ./qwen05-int4 -d CPU "Describe OpenVINO in one sentence"
 
-# 4. 多轮交互聊天
+# 4. Interactive multi-turn chat
 ovtool chat -m ./qwen05-int4 -d GPU --opt perf_mode=LOW_LATENCY
 ```
 
-## 子命令详解
+## Subcommand Reference
 
 ### `ovtool devices`
 
-列出 OpenVINO 可用设备及完整设备名、驱动版本、子设备（如 `GPU.0 / GPU.1`）。
+Lists available OpenVINO devices with full device names, driver versions, and sub-devices (e.g. `GPU.0 / GPU.1`).
 
 ### `ovtool convert <kind> <model>`
 
-| kind | 模型家族 | 默认导出任务 |
+| kind | Model family | Default export task |
 |---|---|---|
-| `llm` | 文本大模型 | `text-generation-with-past` |
-| `vlm` | 视觉语言模型 | `image-text-to-text` |
-| `image` | 扩散图像生成 | 自动按模型选择（SD / SDXL / Flux / LCM） |
+| `llm` | Text LLMs | `text-generation-with-past` |
+| `vlm` | Vision-language models | `image-text-to-text` |
+| `image` | Diffusion image generation | Auto-selected per model (SD / SDXL / Flux / LCM) |
 
-常用参数：
+Common options:
 
-- `-o DIR` 输出目录（默认 `./<模型名>-<量化格式>`）
-- `--weight-format`：`fp32` / `fp16` / `int8` / `int4` / `int4_symg128`（对称分组 128）等预设
-- `--sym` / `--asym`：对称 / 非对称量化（**跑 NPU 建议对称 int4**；CPU/GPU 用非对称精度更好）
-- `--ratio 0.8`、`--group-size 64`：int4 压缩比例与分组大小
-- `--awq --dataset wikitext2`：激活感知量化（AWQ）
-- `--trust-remote-code`：允许执行 HF 仓库自定义建模代码
+- `-o DIR` output directory (default `./<model-name>-<quant-format>`)
+- `--weight-format`: presets such as `fp32` / `fp16` / `int8` / `int4` / `int4_symg128` (symmetric, group 128)
+- `--sym` / `--asym`: symmetric / asymmetric quantization (**symmetric INT4 is required for NPU**; asymmetric gives better accuracy on CPU/GPU)
+- `--ratio 0.8`, `--group-size 64`: INT4 compression ratio and group size
+- `--awq --dataset wikitext2`: activation-aware weight quantization (AWQ)
+- `--trust-remote-code`: allow custom modeling code from the HF repo
 
-示例：
+Examples:
 
 ```bash
 ovtool convert vlm openbmb/MiniCPM-V-2_6 -m ./minicpmv-int4 --sym
 ovtool convert image stabilityai/sd-turbo -m ./sd-turbo-ir --weight-format int8
 ```
 
-### `ovtool generate` / `ovtool chat`（LLM）
+### `ovtool generate` / `ovtool chat` (LLM)
 
-公共参数：`-m` 模型目录；`-d` 设备（`CPU`/`GPU`/`NPU`/`AUTO`/`HETERO:GPU,CPU`…）；
-`--opt KEY=VALUE` 运行时选项（可重复），如：
+Shared options: `-m` model directory; `-d` device (`CPU`/`GPU`/`NPU`/`AUTO`/`HETERO:GPU,CPU`…);
+`--opt KEY=VALUE` runtime options (repeatable), e.g.:
 
 - `--opt perf_mode=THROUGHPUT|LOW_LATENCY|CUMULATIVE_THROUGHPUT`
 - `--opt inference_num_threads=8`
 - `--opt num_streams=auto`
 
-生成参数：`--max-new-tokens` `--temperature`（>0 启用采样）`--top-p` `--top-k`
-`--repetition-penalty` `--rng-seed` `--stop-tokens`；`--no-stream` 关闭流式输出；`--stats` 打印 TTFT/TPOT/吞吐。
+Generation parameters: `--max-new-tokens`, `--temperature` (>0 enables sampling), `--top-p`, `--top-k`,
+`--repetition-penalty`, `--rng-seed`, `--stop-tokens`; `--no-stream` disables streaming; `--stats` prints TTFT/TPOT/throughput.
 
-**NPU 专属参数**（`-d NPU` 时自动生效默认值）：`--max-prompt-len`（默认 1024）与
-`--min-response-len`（默认 128）设定静态形状编译预算；NPU 模型必须用
-`ovtool convert llm ... --weight-format int4 --sym` 转换（对称量化）。
+**NPU-specific options** (defaults applied automatically with `-d NPU`): `--max-prompt-len` (default 1024) and
+`--min-response-len` (default 128) set the static-shape compile budget. NPU models must be converted with
+`ovtool convert llm ... --weight-format int4 --sym` (symmetric quantization).
 
-聊天模式内置命令：`/exit` 退出，`/reset` 清空历史，`/system <text>` 设置系统提示词。
+Chat-mode built-in commands: `/exit` to quit, `/reset` to clear history, `/system <text>` to set the system prompt.
 
-### `ovtool vlm`（多模态）
+### `ovtool vlm` (Multimodal)
 
 ```bash
-ovtool vlm -m ./minicpmv-int4 -d GPU -i ./photo.jpg "描述这张图片的内容"
+ovtool vlm -m ./minicpmv-int4 -d GPU -i ./photo.jpg "Describe the contents of this image"
 ```
 
-`-i` 可重复传多张图；生成参数与 LLM 相同。
+`-i` may be repeated to pass multiple images; generation parameters are the same as for LLMs.
 
-### `ovtool image` / `ovtool image2image`（扩散模型）
+### `ovtool image` / `ovtool image2image` (Diffusion)
 
 ```bash
 ovtool image -m ./sd-turbo-ir -d GPU "a corgi surfing a wave" \
@@ -99,59 +99,59 @@ ovtool image -m ./sd-turbo-ir -d GPU "a corgi surfing a wave" \
     --out-dir ./generated
 ```
 
-参数：`--width/--height`、`--steps`（去噪步数）、`--guidance-scale`、`--num-images`、
-`--negative-prompt`、`--seed`、`--scheduler`（如 `LCM`、`EULER_ANCESTRAL`，需模型适配）、`--out-dir`。
+Options: `--width/--height`, `--steps` (denoising steps), `--guidance-scale`, `--num-images`,
+`--negative-prompt`, `--seed`, `--scheduler` (e.g. `LCM`, `EULER_ANCESTRAL`, depending on the model), `--out-dir`.
 
-> 注意：扩散类模型官方推荐在 **GPU** 上运行（默认设备即 GPU）。
-> NPU 上扩散模型为分段执行（text encoder + UNet 在 NPU、VAE decoder 放 GPU），本工具暂不自动编排该模式。
+> Note: diffusion models are officially recommended to run on **GPU** (which is also the default device).
+> On NPU, diffusion runs in a segmented fashion (text encoder + UNet on NPU, VAE decoder on GPU); this tool does not orchestrate that mode automatically yet.
 
-## 设备选择参考
+## Device Selection Guide
 
-| 设备 | 适用场景 | 注意事项 |
+| Device | Best for | Notes |
 |---|---|---|
-| CPU | 通用，AVX2/AVX-512/AMX 加速 | LLM INT4/INT8 均可 |
-| GPU（iGPU / Arc / DC GPU） | 扩散模型最佳；LLM 吞吐好 | 需要 Intel 显卡驱动 |
-| NPU（Core Ultra） | LLM 低功耗推理 | **必须对称 INT4（`convert ... --sym`）**；静态形状执行，用 `--max-prompt-len`（默认 1024）/`--min-response-len`（默认 128）设定编译期形状；本机 NPU 3720 实测 Qwen3-0.6B 约 21 tok/s |
-| AUTO / HETERO | 自动选择 / 混合执行 | 适合不确定设备能力时 |
+| CPU | General use, accelerated by AVX2/AVX-512/AMX | LLMs work with INT4/INT8 |
+| GPU (iGPU / Arc / DC GPU) | Best for diffusion; good LLM throughput | Requires Intel graphics drivers |
+| NPU (Core Ultra) | Low-power LLM inference | **Symmetric INT4 required (`convert ... --sym`)**; static-shape execution — set the compile-time budget via `--max-prompt-len` (default 1024) / `--min-response-len` (default 128); measured ~21 tok/s on Qwen3-0.6B with the local NPU 3720 |
+| AUTO / HETERO | Automatic selection / mixed execution | Useful when device capabilities are uncertain |
 
-## 代码结构
+## Code Structure
 
 ```
 ovtool/
-├── cli.py        # 入口与子命令注册
-├── devices.py    # 设备枚举/校验
-├── convert.py    # optimum-intel 导出 + 权重量化
-├── llm.py        # LLMPipeline：generate / chat
-├── vlm.py        # VLMPipeline：图文多模态
+├── cli.py        # Entry point & subcommand registration
+├── devices.py    # Device enumeration / validation
+├── convert.py    # optimum-intel export + weight quantization
+├── llm.py        # LLMPipeline: generate / chat
+├── vlm.py        # VLMPipeline: image-text multimodal
 └── imagegen.py   # Text2Image / Image2Image
 ```
 
-## 已验证（本机：Core Ultra 5 125H + Arc Pro iGPU + NPU 3720）
+## Verified (local machine: Core Ultra 5 125H + Arc Pro iGPU + NPU 3720)
 
-- `devices` / 全部子命令 `--help`：✅
-- LLM 转换 + INT4 量化（Qwen2.5-0.5B-Instruct，322MB int4 IR）：✅
-- LLM 转换 + INT4 量化（**Qwen3-0.6B**，思考模型）：✅ GPU 生成 ~55 tok/s，CPU 多轮聊天正常，数学比较回答正确
-- `generate` 单轮生成（CPU / GPU，流式与非流式，`--stats`、`--opt perf_mode=...`）：✅（iGPU 上 ~50 tok/s @0.5B-int4）
-- `chat` 多轮交互（含 `/exit` `/reset` `/system`）：✅
-- 扩散模型转换 + INT8 量化（sd-turbo）：✅
-- `image` 文生图 / `image2image` 图生图（GPU，seed 复现）：✅（512×512×4 步约数秒）
-- **NPU 推理（Qwen3-0.6B 对称 INT4）**：✅ TTFT ~1.5s，~21 tok/s；`--max-prompt-len` / `--min-response-len` 静态形状参数生效
-- **Qwen3.5-0.8B / Qwen3.5-2B**（新一代原生多模态架构 `qwen3_5`，对称/非对称 INT4）：✅ 纯文本生成 GPU 正常（2B ~33 tok/s；0.8B NPU 编译极慢）
-- **Qwen3-VL-2B-Instruct INT4**：✅ 纯文本生成正常
-- `vlm` 多模态路径已按 openvino-genai 官方 API 实现，未做整机下载验证（需转换 VLM 模型后使用）
+- `devices` / `--help` for all subcommands: ✅
+- LLM conversion + INT4 quantization (Qwen2.5-0.5B-Instruct, 322MB int4 IR): ✅
+- LLM conversion + INT4 quantization (**Qwen3-0.6B**, reasoning model): ✅ ~55 tok/s on GPU, multi-turn chat OK on CPU, math comparison answered correctly
+- `generate` one-shot generation (CPU / GPU, streaming & non-streaming, `--stats`, `--opt perf_mode=...`): ✅ (~50 tok/s @0.5B-int4 on iGPU)
+- `chat` multi-turn interaction (incl. `/exit` `/reset` `/system`): ✅
+- Diffusion conversion + INT8 quantization (sd-turbo): ✅
+- `image` text-to-image / `image2image` (GPU, seed reproducibility): ✅ (512×512×4 steps in seconds)
+- **NPU inference (Qwen3-0.6B symmetric INT4)**: ✅ TTFT ~1.5s, ~21 tok/s; `--max-prompt-len` / `--min-response-len` static-shape options verified
+- **Qwen3.5-0.8B / Qwen3.5-2B** (new native multimodal `qwen3_5` architecture, sym/asym INT4): ✅ text generation OK on GPU (2B ~33 tok/s; 0.8B NPU compile extremely slow)
+- **Qwen3-VL-2B-Instruct INT4**: ✅ text generation OK
+- The `vlm` multimodal path is implemented per the official openvino-genai API; image+text inference was not verified end-to-end (see known limitations)
 
-## 已知限制（2026-09 实测）
+## Known Limitations (measured 2026-09)
 
-1. **Qwen3-VL / Qwen3.5 的图像输入**：转换成功但 `VLMPipeline` 图文推理在 GenAI 2026.3.1 上报 `Argument shapes are inconsistent`（各尺寸均复现）；master 分支已有专门的 `InputsEmbedderQwen3VL/Qwen3_5` 实现，等待新版本发布。**纯文本模式不受影响**。
-2. **VLM 跑 NPU**：Qwen3.5-0.8B 文本模式在 NPU 上长时间编译后触发 `ZE_RESULT_ERROR_DEVICE_LOST`（驱动挂死，需重启进程恢复）。NPU 上建议只跑对称 INT4 的纯 LLM（qwen3-0.6b-sym 已验证）。
-3. **FLUX.2-klein 导出**：optimum-intel 2.1.0 追踪 `pos_embed` 时报 `Axis out of rank range`（上游 [issue #1767](https://github.com/huggingface/optimum-intel/issues/1767) 跟踪中）。图像生成请用 SD/SDXL/Flux.1 系（sd-turbo 已验证）。
-4. **optimum 版本护栏**：optimum-intel 2.1.0 对 qwen3-vl/qwen2-vl 等新架构钉了过时的 `MAX_TRANSFORMERS_VERSION`，本工具 `convert vlm` 已自动放宽（`_relax_stale_version_guards`）；qwen3_5 还要求 transformers==5.2.x（5.3+ 移除了 `Qwen3_5DynamicCache`，而 optimum 钉 `<5.6`，5.2 恰好同时满足）。
+1. **Image input for Qwen3-VL / Qwen3.5**: conversion succeeds, but image+text inference via `VLMPipeline` fails with `Argument shapes are inconsistent` on GenAI 2026.3.1 (reproduced at every resolution). The master branch already has dedicated `InputsEmbedderQwen3VL/Qwen3_5` implementations — waiting for the next release. **Text-only mode is unaffected.**
+2. **VLM on NPU**: text mode of Qwen3.5-0.8B triggered `ZE_RESULT_ERROR_DEVICE_LOST` (driver hang, requires process restart) after a long compile on NPU. Recommend running only symmetric-INT4 pure LLMs on NPU (verified with qwen3-0.6b-sym).
+3. **FLUX.2-klein export**: optimum-intel 2.1.0 fails while tracing `pos_embed` with `Axis out of rank range` (tracked upstream in [issue #1767](https://github.com/huggingface/optimum-intel/issues/1767)). For image generation use SD/SDXL/Flux.1-family models (sd-turbo verified).
+4. **optimum version guards**: optimum-intel 2.1.0 pins stale `MAX_TRANSFORMERS_VERSION` values on newer architectures such as qwen3-vl/qwen2-vl; `convert vlm` relaxes them automatically (`_relax_stale_version_guards`). qwen3_5 additionally requires transformers==5.2.x (5.3+ removed `Qwen3_5DynamicCache`, while optimum pins `<5.6`; 5.2 satisfies both).
 
-## 实现备注（踩坑记录）
+## Implementation Notes (lessons learned)
 
-- **扩散模型的分词器位置**：GenAI 的 SD 管线按 `text_encoder → tokenizer` 路径约定，在 `tokenizer/` 子目录查找 `openvino_tokenizer.xml`；`ovtool convert image` 已自动放置到位（LLM/VLM 仍在根目录）。
-- **openvino_tokenizers 扩展**：推理模块统一预 `import openvino_tokenizers` 注册自定义算子，避免 Tokenizer 加载失败。
-- **CLIP 类慢分词器**转换需要 `sentencepiece` / `tiktoken`（已加入依赖）。
-- 生成参数 `rng_seed`、图像结果返回 `ov.Tensor(N,H,W,C)` 均按 openvino-genai 2026.3 API 适配。
-- optimum-intel 2.1.0 不随 `save_pretrained` 保存转换后分词器，故 `convert` 内置了 openvino-tokenizers 转换与保存。
-- **tiktoken 后端分词器的 `tokenizer.json` 序列化损坏**：transformers 5.x 下 Qwen3 等新模型的分词器 `save_pretrained` 写出的 `tokenizer.json` 用 tokenizers 库编码得到空结果（静默坏文件）。`_save_tokenizer` 现在优先从原始 HF 仓库加载分词器，并对每次加载做非空编码探针校验。
+- **Diffusion tokenizer location**: GenAI's SD pipelines look for `openvino_tokenizer.xml` inside the `tokenizer/` component subfolder, following the `text_encoder → tokenizer` path convention. `ovtool convert image` places it there automatically (LLM/VLM keep it at the model root).
+- **openvino_tokenizers extension**: inference modules pre-`import openvino_tokenizers` to register the custom-op extension, preventing Tokenizer load failures.
+- **CLIP-style slow tokenizers** require `sentencepiece` / `tiktoken` to convert (added as dependencies).
+- The `rng_seed` generation parameter and the `ov.Tensor(N,H,W,C)` image result are adapted to the openvino-genai 2026.3 API.
+- optimum-intel 2.1.0 does not save the converted tokenizer with `save_pretrained`, so `convert` converts and saves it via openvino-tokenizers itself.
+- **Broken `tokenizer.json` serialization for tiktoken-backed tokenizers**: under transformers 5.x, `save_pretrained` on tokenizers of newer models such as Qwen3 writes a `tokenizer.json` that encodes to empty results via the tokenizers library (silently broken). `_save_tokenizer` now loads the tokenizer from the original HF repo first and probes each candidate with a non-empty encoding check.
