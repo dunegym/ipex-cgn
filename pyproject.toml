@@ -26,3 +26,6 @@ ovtool = "ovtool.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ovtool*"]
+
+[tool.setuptools.package-data]
+ovtool = ["registry.yaml"]

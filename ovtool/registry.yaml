@@ -1,0 +1,93 @@
+# ovtool built-in model compatibility registry.
+#
+# Records models available from Hugging Face together with the verified
+# (device x quantization x parameters) combinations, so that unusable
+# inference configurations can be rejected before model load time.
+#
+# Fields per entry:
+#   id            Hugging Face repo id
+#   kind          llm | vlm | image
+#   match         lowercase substrings used to associate a -m path/id with this entry
+#   variants      quantization variants with their allowed devices
+#                 (quant is auto-detected from the -m path: "sym" -> symmetric,
+#                  "int8" -> int8, otherwise int4-asym is assumed)
+#   text_only     vlm only: image inputs are known-broken on current GenAI
+#   param_rules   extra checks on generation parameters per device
+schema_version: 1
+
+models:
+  - id: Qwen/Qwen2.5-0.5B-Instruct
+    kind: llm
+    match: ["qwen2.5-0.5b", "qwen2_5-0.5b"]
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int4 --weight-format int4"
+
+  - id: Qwen/Qwen3-0.6B
+    kind: llm
+    match: ["qwen3-0.6b", "qwen3_0.6b"]
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-int4 --weight-format int4"
+      int4-sym-g128:
+        devices: [CPU, GPU, NPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-int4-sym --weight-format int4 --sym"
+        note: NPU-ready (symmetric INT4)
+
+  - id: Qwen/Qwen3.5-0.8B
+    kind: vlm
+    match: ["qwen3.5-0.8b", "qwen3_5-0.8b"]
+    text_only: true
+    variants:
+      int4-sym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-int4-sym --weight-format int4 --sym"
+        note: symmetric so it can be revisited for NPU once VLM-on-NPU is stable
+
+  - id: Qwen/Qwen3.5-2B
+    kind: vlm
+    match: ["qwen3.5-2b", "qwen3_5-2b"]
+    text_only: true
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-int4 --weight-format int4"
+
+  - id: Qwen/Qwen3-VL-2B-Instruct
+    kind: vlm
+    match: ["qwen3-vl-2b", "qwen3_vl-2b"]
+    text_only: true
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-int4 --weight-format int4"
+
+  - id: stabilityai/sd-turbo
+    kind: image
+    match: ["sd-turbo"]
+    recommended_device: GPU
+    variants:
+      int8:
+        devices: [GPU, CPU, AUTO]
+        convert: "ovtool convert image stabilityai/sd-turbo -o ./sd-turbo-int8 --weight-format int8"
+
+# global rules, evaluated for every matched entry
+global_rules:
+  - when_device: NPU
+    forbid_kind: image
+    message: >-
+      diffusion models are not supported end-to-end on NPU by this tool
+      (NPU executes only text-encoder/UNet stages; VAE decode stays on GPU).
+  - when_device: NPU
+    forbid_kind: vlm
+    message: >-
+      VLM pipelines on NPU hung the driver in testing
+      (ZE_RESULT_ERROR_DEVICE_LOST); run VLMs on CPU/GPU.
+  - when_device: NPU
+    require_quant: int4-sym-g128
+    for_kinds: [llm]
+    message: >-
+      NPU requires symmetric INT4 weights; convert with
+      'ovtool convert llm <model> --weight-format int4 --sym'.

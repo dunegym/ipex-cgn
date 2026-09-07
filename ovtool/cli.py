@@ -22,6 +22,11 @@ def main(argv: list[str] | None = None) -> None:
 
     # devices
     from .devices import print_devices
+    from .registry import print_models
+    p = sub.add_parser("models", help="List registry-known HF models with verified device/parameter combos")
+    p.add_argument("query", nargs="?", default=None, help="Optional case-insensitive filter")
+    p.set_defaults(func=lambda args: print_models(args.query))
+
     p = sub.add_parser("devices", help="List available inference devices")
     p.set_defaults(func=lambda args: print_devices())
 
@@ -45,6 +50,17 @@ def main(argv: list[str] | None = None) -> None:
     hook = getattr(args, "hook", None)
     if hook:
         hook(args)
+
+    # registry compatibility gate: reject known-bad (model x device x params) combos
+    kind_by_cmd = {"generate": "llm", "chat": "llm", "vlm": "vlm",
+                   "image": "image", "image2image": "image"}
+    kind = kind_by_cmd.get(args.command)
+    if kind and getattr(args, "model", None) and getattr(args, "device", None):
+        from .registry import check, report
+        if not report(check(kind, args.model, args.device, args)):
+            print("Blocked by the compatibility registry. Run 'ovtool models' for verified combos.")
+            sys.exit(2)
+
     try:
         args.func(args)
     except KeyboardInterrupt:

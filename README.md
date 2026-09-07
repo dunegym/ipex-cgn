@@ -37,6 +37,18 @@ ovtool chat -m ./qwen05-int4 -d GPU --opt perf_mode=LOW_LATENCY
 
 ## Subcommand Reference
 
+### `ovtool models`
+
+Lists the built-in compatibility registry: HF models with their verified
+(device × quantization × parameter) combinations and the matching `convert`
+commands. All inference subcommands consult this registry before loading a
+model and refuse known-bad configurations, e.g.:
+
+- asymmetric INT4 LLMs on NPU (symmetric INT4 required)
+- diffusion or VLM pipelines on NPU (unsupported/hang in testing)
+- image inputs for Qwen3-VL / Qwen3.5 on the current openvino-genai release
+- `--max-new-tokens` exceeding the NPU static response budget (warning)
+
 ### `ovtool devices`
 
 Lists available OpenVINO devices with full device names, driver versions, and sub-devices (e.g. `GPU.0 / GPU.1`).
