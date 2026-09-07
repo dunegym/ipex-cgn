@@ -96,8 +96,14 @@ def _build_quant_cfg(args: argparse.Namespace):
     kwargs = dict(bits=4, sym=sym, group_size=group_size,
                   ratio=args.ratio if args.ratio is not None else 1.0)
     if args.awq:
+        # text models calibrate on wikitext2; visual-language models need a
+        # multimodal dataset (textvqa) plus an explicit processor for the
+        # calibration builder
+        default_awq_dataset = "textvqa" if args.kind == "vlm" else "wikitext2"
         kwargs.update(quant_method="awq",
-                      dataset=args.dataset or "wikitext2")
+                      dataset=args.dataset or default_awq_dataset)
+        if args.kind == "vlm":
+            kwargs["processor"] = args.model
     elif args.dataset:
         kwargs.update(dataset=args.dataset)
     return OVWeightQuantizationConfig(**kwargs)

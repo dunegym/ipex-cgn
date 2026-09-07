@@ -10,9 +10,12 @@
 #   match         lowercase substrings used to associate a -m path/id with this entry
 #   variants      quantization variants with their allowed devices
 #                 (quant is auto-detected from the -m path: "sym" -> symmetric,
-#                  "int8" -> int8, otherwise int4-asym is assumed)
+#                  "asym" -> asymmetric, "int8" -> int8, "fp16" -> fp16,
+#                  "awq" -> activation-aware int4)
 #   text_only     vlm only: image inputs are known-broken on current GenAI
-#   param_rules   extra checks on generation parameters per device
+#
+# Every llm/vlm model below ships the full five-variant ladder:
+# int4-asym-g128 / int4-sym-g128 / int4-awq-g128 / int8 / fp16
 schema_version: 1
 
 models:
@@ -23,10 +26,16 @@ models:
       int4-asym-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int4 --weight-format int4"
+      int4-sym-g128:
+        devices: [CPU, GPU, NPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int4-sym --weight-format int4 --sym"
+        note: NPU-ready (symmetric INT4)
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-awq --weight-format int4 --awq"
       int8:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-int8 --weight-format int8"
-        note: ~10% faster than int4 on iGPU, 1.5x larger
       fp16:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen2.5-0.5B-Instruct -o ./qwen05-fp16 --weight-format fp16"
@@ -41,7 +50,7 @@ models:
       int4-sym-g128:
         devices: [CPU, GPU, NPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-int4-sym --weight-format int4 --sym"
-        note: NPU-ready (symmetric INT4)
+        note: NPU-ready (symmetric INT4); measured ~21 tok/s on NPU 3720
       int4-awq-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-awq --weight-format int4 --awq"
@@ -58,10 +67,21 @@ models:
     match: ["qwen3.5-0.8b", "qwen3_5-0.8b"]
     text_only: true
     variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-int4 --weight-format int4"
       int4-sym-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-int4-sym --weight-format int4 --sym"
-        note: symmetric so it can be revisited for NPU once VLM-on-NPU is stable
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-awq --weight-format int4 --awq"
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-0.8B -o ./qwen35-08b-fp16 --weight-format fp16"
 
   - id: Qwen/Qwen3.5-2B
     kind: vlm
@@ -71,6 +91,18 @@ models:
       int4-asym-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-int4 --weight-format int4"
+      int4-sym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-int4-sym --weight-format int4 --sym"
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-awq --weight-format int4 --awq"
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3.5-2B -o ./qwen35-2b-fp16 --weight-format fp16"
 
   - id: Qwen/Qwen3-VL-2B-Instruct
     kind: vlm
@@ -80,6 +112,18 @@ models:
       int4-asym-g128:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-int4 --weight-format int4"
+      int4-sym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-int4-sym --weight-format int4 --sym"
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-awq --weight-format int4 --awq"
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-fp16 --weight-format fp16"
 
   - id: stabilityai/sd-turbo
     kind: image
