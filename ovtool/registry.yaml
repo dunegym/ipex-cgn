@@ -62,6 +62,51 @@ models:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert llm Qwen/Qwen3-0.6B -o ./qwen3-06b-fp16 --weight-format fp16"
 
+  - id: Qwen/Qwen3-1.7B
+    kind: llm
+    match: ["qwen3-1.7b", "qwen3_1.7b"]
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-1.7B -o ./qwen3-17b-int4 --weight-format int4"
+        note: ~42 tok/s on iGPU
+      int4-sym-g128:
+        devices: [CPU, GPU, NPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-1.7B -o ./qwen3-17b-int4-sym --weight-format int4 --sym"
+        note: NPU-ready; measured ~16 tok/s on NPU 3720
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-1.7B -o ./qwen3-17b-awq --weight-format int4 --awq"
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-1.7B -o ./qwen3-17b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-1.7B -o ./qwen3-17b-fp16 --weight-format fp16"
+
+  - id: Qwen/Qwen3-4B
+    kind: llm
+    match: ["qwen3-4b", "qwen3_4b"]
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-4B -o ./qwen3-4b-int4 --weight-format int4"
+        note: ~22 tok/s on iGPU
+      int4-sym-g128:
+        devices: [CPU, GPU, NPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-4B -o ./qwen3-4b-int4-sym --weight-format int4 --sym"
+        note: NPU-ready; verified ~9 tok/s on NPU 3720 (memory-bound at 4B)
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-4B -o ./qwen3-4b-awq --weight-format int4 --awq"
+        note: ~24 tok/s on iGPU, slightly faster than plain int4 at 4B
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-4B -o ./qwen3-4b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert llm Qwen/Qwen3-4B -o ./qwen3-4b-fp16 --weight-format fp16"
+
   - id: Qwen/Qwen3.5-0.8B
     kind: vlm
     match: ["qwen3.5-0.8b", "qwen3_5-0.8b"]
