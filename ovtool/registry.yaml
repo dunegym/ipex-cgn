@@ -170,6 +170,29 @@ models:
         devices: [CPU, GPU, AUTO]
         convert: "ovtool convert vlm Qwen/Qwen3-VL-2B-Instruct -o ./qwen3vl-2b-fp16 --weight-format fp16"
 
+  - id: Qwen/Qwen3-VL-4B-Instruct
+    kind: vlm
+    match: ["qwen3-vl-4b", "qwen3_vl-4b"]
+    text_only: true
+    variants:
+      int4-asym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-4B-Instruct -o ./qwen3vl-4b-int4 --weight-format int4"
+        note: ~24 tok/s on iGPU
+      int4-sym-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-4B-Instruct -o ./qwen3vl-4b-int4-sym --weight-format int4 --sym"
+      int4-awq-g128:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-4B-Instruct -o ./qwen3vl-4b-awq --weight-format int4 --awq"
+        note: ~24.5 tok/s on iGPU (on par with plain int4 at this size)
+      int8:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-4B-Instruct -o ./qwen3vl-4b-int8 --weight-format int8"
+      fp16:
+        devices: [CPU, GPU, AUTO]
+        convert: "ovtool convert vlm Qwen/Qwen3-VL-4B-Instruct -o ./qwen3vl-4b-fp16 --weight-format fp16"
+
   - id: stabilityai/sd-turbo
     kind: image
     match: ["sd-turbo"]
