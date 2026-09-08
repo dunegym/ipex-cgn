@@ -212,6 +212,11 @@ def run_convert(args: argparse.Namespace) -> None:
         trust_remote_code=args.trust_remote_code,
         use_cache=True,
     )
+    if quant_cfg is None:
+        # CRITICAL: optimum's exporter auto-quantizes every submodel >=1B
+        # parameters to int8_asym when no quantization_config is given
+        # (_apply_model_size_based_quantization). Disable it for fp16/fp32.
+        load_kwargs["load_in_8bit"] = False
 
     print(f"Exporting {args.model!r} ({args.kind}) -> {out} "
           f"[weight-format={args.weight_format}] ...")
@@ -229,6 +234,11 @@ def run_convert(args: argparse.Namespace) -> None:
         raise SystemExit(f"Export failed: {e}\n"
                          "Tip: try adding --trust-remote-code for custom models, "
                          "or a different --weight-format.") from e
+
+    if quant_cfg is None and args.weight_format == "fp16":
+        # load_in_8bit=False saved the exported (bf16) weights uncompressed;
+        # apply the FP16 compression transformation explicitly
+        model.half()
 
     # optimum-intel saves the model + configs; we add the converted tokenizer
     model.save_pretrained(out)
